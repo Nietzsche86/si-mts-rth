@@ -34,6 +34,16 @@ class AppColors {
 }
 
 class AppTheme {
+  // Aliases for color tokens
+  static const Color emeraldPrimary = AppColors.primary;
+  static const Color mintSurface = AppColors.primaryContainer;
+  static const Color warmGold = AppColors.secondary;
+  static const Color sandGrey = AppColors.background;
+  static const Color borderSubtle = AppColors.outline;
+  static const Color textPrimary = AppColors.textPrimary;
+  static const Color textSecondary = AppColors.textSecondary;
+  static const Color textHint = AppColors.textHint;
+
   static ThemeData get lightTheme {
     const colorScheme = ColorScheme.light(
       primary: AppColors.primary,

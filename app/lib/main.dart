@@ -3,6 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'presentation/screens/penilaian/input_nilai_screen.dart';
+import 'presentation/screens/absensi/input_absensi_screen.dart';
+import 'presentation/screens/siswa/siswa_form_screen.dart';
+import 'presentation/screens/rombel/pindah_rombel_dialog.dart';
+import 'presentation/screens/sync/sync_pairing_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -207,10 +212,13 @@ class SyncStatusBar extends StatelessWidget {
             ElevatedButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Menghubungkan ke server operator WiFi...'),
-                    duration: Duration(seconds: 2),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SyncPairingScreen(
+                      pendingOutboxCount: pendingCount,
+                      onTriggerSync: () {},
+                    ),
                   ),
                 );
               },
@@ -237,6 +245,7 @@ class KelasSayaTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         _buildClassCard(
+          context,
           rombel: '7A',
           mapel: 'Bahasa Arab',
           peran: 'Utama',
@@ -247,6 +256,7 @@ class KelasSayaTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildClassCard(
+          context,
           rombel: '7B',
           mapel: 'Al-Qur\'an Hadis',
           peran: 'Utama',
@@ -257,6 +267,7 @@ class KelasSayaTab extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildClassCard(
+          context,
           rombel: '8C',
           mapel: 'Fikih',
           peran: 'Pendamping',
@@ -269,7 +280,8 @@ class KelasSayaTab extends StatelessWidget {
     );
   }
 
-  Widget _buildClassCard({
+  Widget _buildClassCard(
+    BuildContext context, {
     required String rombel,
     required String mapel,
     required String peran,
@@ -279,7 +291,18 @@ class KelasSayaTab extends StatelessWidget {
     required double progressValue,
   }) {
     return Card(
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => InputNilaiScreen(rombelNama: rombel, mapelNama: mapel),
+            ),
+          );
+        },
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,8 +383,9 @@ class KelasSayaTab extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Tab 2: Fast-Entry Grade Grid (PRD F10 & UI Guideline 5.3)
@@ -483,50 +507,83 @@ class _InputNilaiCepatTabState extends State<InputNilaiCepatTab> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              siswa['nama'],
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                Text(
-                                  'NIS: ${siswa['nis']}',
-                                  style: AppTheme.tabularNumberStyle.copyWith(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.normal,
-                                  ),
+                        child: InkWell(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SiswaFormScreen(
+                                  namaLengkap: siswa['nama'],
+                                  nis: siswa['nis'],
                                 ),
-                                if (siswa['sumber'] != null) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius: BorderRadius.circular(4),
+                              ),
+                            );
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                siswa['nama'],
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(
+                                    'NIS: ${siswa['nis']}',
+                                    style: AppTheme.tabularNumberStyle.copyWith(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.normal,
                                     ),
-                                    child: Text(
-                                      siswa['sumber'],
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.primary,
+                                  ),
+                                  if (siswa['sumber'] != null) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.primaryContainer,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        siswa['sumber'],
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ],
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.textSecondary),
+                        tooltip: 'Pindah Rombel',
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => PindahRombelDialog(
+                              siswaNama: siswa['nama'],
+                              rombelAsalNama: '7A',
+                              daftarRombelTujuan: const ['7B', '7C', '8A'],
+                              onConfirm: (tujuan, bawa) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('${siswa['nama']} dipindahkan ke $tujuan (Bawa nilai: $bawa)')),
+                                );
+                              },
+                            ),
+                          );
+                        },
                       ),
                       // Input Nilai Cepat Rata Tengah Tabular Figures
                       SizedBox(
@@ -611,15 +668,32 @@ class _AbsensiCepatTabState extends State<AbsensiCepatTab> {
                 'Absensi Rombel 7A • Hari Ini',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
               ),
-              ElevatedButton.icon(
-                onPressed: _setAllHadir,
-                icon: const Icon(Icons.done_all, size: 16),
-                label: const Text('Semua Hadir (H)'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(120, 36),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.fullscreen_rounded, size: 22, color: AppColors.primary),
+                    tooltip: 'Buka Layar Presensi Penuh',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const InputAbsensiScreen(rombelNama: '7A'),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton.icon(
+                    onPressed: _setAllHadir,
+                    icon: const Icon(Icons.done_all, size: 16),
+                    label: const Text('Semua Hadir (H)'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(120, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -201,9 +201,9 @@ class DioSyncClient {
           [];
 
       if (allowedKeanggotaan.isNotEmpty) {
-        await LocalGc.runGarbageCollection(
-          db: db,
-          allowedKeanggotaanIds: allowedKeanggotaan,
+        await LocalGarbageCollector(db).runLocalGc(
+          allowedKeanggotaanIds: allowedKeanggotaan.toSet(),
+          isAdminOrKepala: false,
         );
       }
     }
