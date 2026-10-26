@@ -1,4 +1,5 @@
 @echo off
+setlocal
 title Server Operator MTs Roudhotut Thowalib
 color 0A
 
@@ -7,25 +8,26 @@ echo     MEMULAI SERVER LOKAL OPERATOR - MTS ROUDHOTUT THOWALIB
 echo ====================================================================
 echo.
 
-cd /d "%~dp0server"
+set "SCRIPT_DIR=%~dp0"
+set "SERVER_DIR=%SCRIPT_DIR%server"
+set "PYTHON_EXE=%SERVER_DIR%\.venv\Scripts\python.exe"
 
-if not exist ".venv\Scripts\python.exe" (
+if not exist "%PYTHON_EXE%" (
     color 0C
-    echo [ERROR] Virtual environment (.venv) tidak ditemukan di folder server!
-    echo Silakan pastikan python venv sudah terpasang di folder:
-    echo %~dp0server\.venv
+    echo [ERROR] Python environment tidak ditemukan di:
+    echo %PYTHON_EXE%
     echo.
     pause
     exit /b 1
 )
 
-echo Memeriksa dan menjalankan server...
+cd /d "%SERVER_DIR%"
+
+echo Menjalankan server lokal...
 echo.
 
-".venv\Scripts\python.exe" run_server.py
+"%PYTHON_EXE%" run_server.py
 
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo Server berhenti dengan kode error %ERRORLEVEL%.
-    pause
-)
+echo.
+echo Server telah dimatikan.
+pause

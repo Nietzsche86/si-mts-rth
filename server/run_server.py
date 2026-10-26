@@ -34,4 +34,4 @@ if __name__ == "__main__":
     print(" Tekan CTRL+C untuk menghentikan server.\n")
 
     # Jalankan uvicorn 1 worker untuk WAL mode (PRD Bagian 7)
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True, workers=1)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False, workers=1)
