@@ -3,7 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.db.engine import init_db
+from app.db.engine import init_db, get_session_context
+from app.db.seeder import seed_initial_data
 from app.api.auth import router as auth_router
 from app.api.sync import router as sync_router
 from app.api.import_export import router as emis_router
@@ -12,6 +13,8 @@ from app.api.import_export import router as emis_router
 async def lifespan(app: FastAPI):
     # Inisialisasi Database SQLite WAL dan 5 Partial Unique Index wajib
     init_db()
+    with get_session_context() as session:
+        seed_initial_data(session)
     yield
 
 app = FastAPI(

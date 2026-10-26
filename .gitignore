@@ -32,6 +32,10 @@ server/*.db
 server/*.db-wal
 server/*.db-shm
 server/*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
 server/uploads/
 server/storage/
 server/test_files/

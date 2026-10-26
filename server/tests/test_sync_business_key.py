@@ -1,23 +1,48 @@
 from sqlmodel import Session, select
-from app.models import User, Nilai, AuditLog
+from app.models import User, Nilai, AuditLog, Siswa, KeanggotaanRombel
 from app.schemas.sync import SyncChangeItem
 from app.services.sync_service import process_push_changes
+from app.db.seeder import seed_initial_data
 
 def test_sync_business_key_upsert_nilai(session: Session):
-    # Setup user
-    user = User(
-        username="guru_test",
-        pin_hash="dummy",
-        aktif=1,
-        device_id="hp-1"
+    # Inisialisasi master data dengan seeder
+    seed_initial_data(session)
+
+    # Ambil user admin
+    user = session.exec(select(User).where(User.username == "admin")).first()
+    assert user is not None
+
+    # Buat siswa dan keanggotaan aktif di 7A
+    siswa = Siswa(
+        id="s-test-bk-01",
+        nis="90001",
+        nama_lengkap="Siswa Test BK",
+        jk="L",
+        status_aktif="aktif",
+        created_at=1000,
+        updated_at=1000,
+        device_id="hp-1",
+        server_seq=1
     )
-    session.add(user)
+    session.add(siswa)
+
+    keanggotaan_id = "k-test-bk-01"
+    keanggotaan = KeanggotaanRombel(
+        id=keanggotaan_id,
+        siswa_id=siswa.id,
+        rombel_id="rombel-7a",
+        tanggal_masuk="2026-07-15",
+        tanggal_keluar=None,
+        deleted=0,
+        device_id="hp-1",
+        server_seq=1
+    )
+    session.add(keanggotaan)
     session.commit()
 
-    keanggotaan_id = "k-001"
-    mapel_id = "mapel-arab"
-    semester_id = "sem-1"
-    jenis_nilai_id = "jenis-uh"
+    mapel_id = "mapel-bahasa_arab"
+    semester_id = "sem-2026-ganjil"
+    jenis_nilai_id = "jn-uh"
     urutan_ke = 1
 
     # 1. Guru 1 push nilai UH 1 (UUID A, nilai 80.0, waktu T1)
@@ -36,7 +61,7 @@ def test_sync_business_key_upsert_nilai(session: Session):
             "tanggal": "2026-10-26",
             "keterangan": "UH 1",
             "sumber_nilai_id": None,
-            "diinput_oleh_guru_id": "guru-1",
+            "diinput_oleh_guru_id": "guru-001",
             "created_at": 1000,
             "updated_at": 1000,
             "deleted": 0,
@@ -65,7 +90,7 @@ def test_sync_business_key_upsert_nilai(session: Session):
             "tanggal": "2026-10-26",
             "keterangan": "UH 1 Revisi",
             "sumber_nilai_id": None,
-            "diinput_oleh_guru_id": "guru-2",
+            "diinput_oleh_guru_id": "guru-002",
             "created_at": 1100,
             "updated_at": 1100,
             "deleted": 0,
@@ -83,7 +108,7 @@ def test_sync_business_key_upsert_nilai(session: Session):
     db_nilai = session.get(Nilai, "uuid-guru-1")
     assert db_nilai is not None
     assert db_nilai.nilai == 90.0
-    assert db_nilai.diinput_oleh_guru_id == "guru-2"
+    assert db_nilai.diinput_oleh_guru_id == "guru-002"
 
     # Verifikasi audit log tercatat
     audit = session.exec(select(AuditLog).where(AuditLog.aksi == "CONFLICT_BUSINESS_KEY_NILAI")).first()

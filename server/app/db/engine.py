@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import contextmanager
 from typing import Generator
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
@@ -77,5 +78,10 @@ def init_db() -> None:
         create_partial_indexes(session)
 
 def get_session() -> Generator[Session, None, None]:
+    with Session(engine) as session:
+        yield session
+
+@contextmanager
+def get_session_context() -> Generator[Session, None, None]:
     with Session(engine) as session:
         yield session
