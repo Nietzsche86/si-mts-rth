@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'data/providers/database_providers.dart';
+import 'data/repositories/penilaian_repository.dart';
+import 'data/repositories/absensi_repository.dart';
+import 'data/repositories/pengampu_repository.dart';
 import 'presentation/screens/penilaian/input_nilai_screen.dart';
 import 'presentation/screens/absensi/input_absensi_screen.dart';
 import 'presentation/screens/siswa/siswa_form_screen.dart';
@@ -28,18 +32,22 @@ class MTsApp extends StatelessWidget {
   }
 }
 
-class MainHomeScreen extends StatefulWidget {
+class MainHomeScreen extends ConsumerStatefulWidget {
   const MainHomeScreen({super.key});
 
   @override
-  State<MainHomeScreen> createState() => _MainHomeScreenState();
+  ConsumerState<MainHomeScreen> createState() => _MainHomeScreenState();
 }
 
-class _MainHomeScreenState extends State<MainHomeScreen> {
+class _MainHomeScreenState extends ConsumerState<MainHomeScreen> {
   int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider);
+    final semester = ref.watch(activeSemesterProvider);
+    final pendingOutbox = ref.watch(pendingOutboxCountProvider).asData?.value ?? 0;
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -55,17 +63,17 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'MTs Roudhotut Thowalib',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    'Semester Ganjil 2026/2027',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    '${semester.semesterNama} ${semester.tahunAjaranNama}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -81,9 +89,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.outline),
             ),
-            child: const Text(
-              'Guru & Wali 7A',
-              style: TextStyle(
+            child: Text(
+              user.isAdmin
+                  ? 'Admin'
+                  : (user.isWaliKelas ? 'Guru & Wali ${user.rombelWaliNama}' : 'Guru Mapel'),
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.onPrimaryContainer,
@@ -94,9 +104,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       ),
       body: Column(
         children: [
-          // Banner Status Sinkronisasi Sticky (PRD F18 & UI Guideline 5.1)
-          const SyncStatusBar(
-            pendingCount: 2,
+          // Banner Status Sinkronisasi Sticky Reaktif
+          SyncStatusBar(
+            pendingCount: pendingOutbox,
             lastSyncHours: 2,
           ),
           Expanded(
@@ -235,61 +245,65 @@ class SyncStatusBar extends StatelessWidget {
   }
 }
 
-/// Tab 1: Kelas Saya
-class KelasSayaTab extends StatelessWidget {
+/// Tab 1: Kelas Saya (Terkoneksi langsung ke PengampuRepository Drift DB)
+class KelasSayaTab extends ConsumerWidget {
   const KelasSayaTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _buildClassCard(
-          context,
-          rombel: '7A',
-          mapel: 'Bahasa Arab',
-          peran: 'Utama',
-          isUtama: true,
-          cakupanText: 'Seluruh kelas • 32 Siswa',
-          progressText: 'UH 2 terisi 30/32 siswa — 94%',
-          progressValue: 0.94,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final summaryAsync = ref.watch(kelasSayaSummaryProvider);
+
+    return summaryAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.danger),
+              const SizedBox(height: 12),
+              Text('Gagal memuat daftar kelas: $err', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => ref.refresh(kelasSayaSummaryProvider),
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        _buildClassCard(
-          context,
-          rombel: '7B',
-          mapel: 'Al-Qur\'an Hadis',
-          peran: 'Utama',
-          isUtama: true,
-          cakupanText: 'Kelompok Saya • 16 Siswa (+2 belum dikelompokkan)',
-          progressText: 'Tugas 1 terisi 18/18 siswa — 100%',
-          progressValue: 1.0,
-        ),
-        const SizedBox(height: 12),
-        _buildClassCard(
-          context,
-          rombel: '8C',
-          mapel: 'Fikih',
-          peran: 'Pendamping',
-          isUtama: false,
-          cakupanText: 'Kelompok 2 • 15 Siswa',
-          progressText: 'UH 1 terisi 12/15 siswa — 80%',
-          progressValue: 0.80,
-        ),
-      ],
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Text(
+                'Belum ada penugasan pengampu untuk akun ini di semester aktif.',
+                style: TextStyle(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async => ref.refresh(kelasSayaSummaryProvider),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _buildClassCard(context, item);
+            },
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildClassCard(
-    BuildContext context, {
-    required String rombel,
-    required String mapel,
-    required String peran,
-    required bool isUtama,
-    required String cakupanText,
-    required String progressText,
-    required double progressValue,
-  }) {
+  Widget _buildClassCard(BuildContext context, PengampuSummaryItem item) {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -298,138 +312,215 @@ class KelasSayaTab extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => InputNilaiScreen(rombelNama: rombel, mapelNama: mapel),
+              builder: (_) => InputNilaiScreen(
+                rombelId: item.rombelId,
+                rombelNama: item.rombelNama,
+                mapelId: item.mapelId,
+                mapelNama: item.mapelNama,
+              ),
             ),
           );
         },
         child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    rombel,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      item.rombelNama,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    mapel,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.mapelNama,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isUtama ? AppColors.secondaryContainer : AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: isUtama ? AppColors.secondary : AppColors.outline,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: item.isUtama ? AppColors.secondaryContainer : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: item.isUtama ? AppColors.secondary : AppColors.outline,
+                      ),
+                    ),
+                    child: Text(
+                      item.isUtama ? 'Utama' : 'Pendamping',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: item.isUtama ? AppColors.onSecondaryContainer : AppColors.textSecondary,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    peran,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: isUtama ? AppColors.onSecondaryContainer : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              cakupanText,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progressValue,
-                minHeight: 6,
-                backgroundColor: AppColors.surfaceVariant,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  progressValue >= 1.0 ? AppColors.success : AppColors.primary,
+              const SizedBox(height: 8),
+              Text(
+                item.cakupanText,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
                 ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              progressText,
-              style: const TextStyle(fontSize: 11, color: AppColors.textHint),
-            ),
-          ],
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: item.progressValue,
+                  minHeight: 6,
+                  backgroundColor: AppColors.surfaceVariant,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    item.progressValue >= 1.0 ? AppColors.success : AppColors.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                item.progressText,
+                style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
-/// Tab 2: Fast-Entry Grade Grid (PRD F10 & UI Guideline 5.3)
-class InputNilaiCepatTab extends StatefulWidget {
+/// Tab 2: Fast-Entry Grade Grid (Terkoneksi langsung ke PenilaianRepository SQLite)
+class InputNilaiCepatTab extends ConsumerStatefulWidget {
   const InputNilaiCepatTab({super.key});
 
   @override
-  State<InputNilaiCepatTab> createState() => _InputNilaiCepatTabState();
+  ConsumerState<InputNilaiCepatTab> createState() => _InputNilaiCepatTabState();
 }
 
-class _InputNilaiCepatTabState extends State<InputNilaiCepatTab> {
+class _InputNilaiCepatTabState extends ConsumerState<InputNilaiCepatTab> {
   String _selectedJenis = 'UH';
+  final int _urutanKe = 1;
   final double _kkm = 75.0;
 
-  final List<Map<String, dynamic>> _siswaList = [
-    {
-      'no': 1,
-      'nis': '202607001',
-      'nama': 'Ahmad Fauzi Ridwan',
-      'nilai': '85',
-      'sumber': null,
-    },
-    {
-      'no': 2,
-      'nis': '202607002',
-      'nama': 'Bilqis Nur Azizah',
-      'nilai': '70', // di bawah KKM
-      'sumber': null,
-    },
-    {
-      'no': 3,
-      'nis': '202607003',
-      'nama': 'Dian Muhammad Irfan',
-      'nilai': '92',
-      'sumber': 'Bawaan rombel asal (7A)',
-    },
-    {
-      'no': 4,
-      'nis': '202607004',
-      'nama': 'Farah Nabila Putri',
-      'nilai': '',
-      'sumber': null,
-    },
-  ];
+  List<SiswaNilaiItem> _siswaItems = [];
+  final Map<String, TextEditingController> _controllers = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadNilaiData();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadNilaiData() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(penilaianRepoProvider);
+      final list = await repo.getSiswaNilaiList(
+        rombelId: 'rombel-7a',
+        mapelId: 'mapel-arab',
+        semesterId: 'sem-2026-ganjil',
+        jenisNilaiId: _selectedJenis,
+        urutanKe: _urutanKe,
+      );
+
+      for (final s in list) {
+        if (!_controllers.containsKey(s.keanggotaanId)) {
+          final val = s.nilaiAngka;
+          _controllers[s.keanggotaanId] = TextEditingController(
+            text: val != null
+                ? (val % 1 == 0 ? val.toInt().toString() : val.toString())
+                : '',
+          );
+        } else {
+          final val = s.nilaiAngka;
+          _controllers[s.keanggotaanId]!.text = val != null
+              ? (val % 1 == 0 ? val.toInt().toString() : val.toString())
+              : '';
+        }
+      }
+
+      _siswaItems = list;
+    } catch (e) {
+      debugPrint('[InputNilaiCepat] Error loading data: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _simpanNilai(SiswaNilaiItem siswa, String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    final val = double.tryParse(trimmed);
+    if (val == null) return;
+
+    if (val < 0 || val > 100) {
+      HapticFeedback.heavyImpact();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nilai harus di antara 0 dan 100'),
+            backgroundColor: Color(0xFFDC2626),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final repo = ref.read(penilaianRepoProvider);
+      final user = ref.read(currentUserProvider);
+      final deviceId = ref.read(activeDeviceIdProvider);
+
+      await repo.simpanNilai(
+        keanggotaanId: siswa.keanggotaanId,
+        mapelId: 'mapel-arab',
+        semesterId: 'sem-2026-ganjil',
+        jenisNilaiId: _selectedJenis,
+        urutanKe: _urutanKe,
+        nilaiAngka: val,
+        guruId: user.guruId ?? 'guru-001',
+        deviceId: deviceId,
+      );
+
+      HapticFeedback.lightImpact();
+      ref.invalidate(kelasSayaSummaryProvider);
+    } catch (e) {
+      debugPrint('[InputNilaiCepat] Error saving nilai: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -453,8 +544,11 @@ class _InputNilaiCepatTabState extends State<InputNilaiCepatTab> {
                           label: Text(jenis),
                           selected: isSelected,
                           onSelected: (_) {
-                            HapticFeedback.selectionClick();
-                            setState(() => _selectedJenis = jenis);
+                            if (_selectedJenis != jenis) {
+                              HapticFeedback.selectionClick();
+                              setState(() => _selectedJenis = jenis);
+                              _loadNilaiData();
+                            }
                           },
                         ),
                       );
@@ -480,178 +574,274 @@ class _InputNilaiCepatTabState extends State<InputNilaiCepatTab> {
             ],
           ),
         ),
-        const Divider(),
+        const Divider(height: 1),
         // Fast-Entry List Siswa
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: _siswaList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final siswa = _siswaList[index];
-              final nilaiVal = double.tryParse(siswa['nilai'] ?? '');
-              final isUnderKkm = nilaiVal != null && nilaiVal < _kkm;
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _siswaItems.isEmpty
+                  ? const Center(child: Text('Tidak ada siswa aktif'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _siswaItems.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final siswa = _siswaItems[index];
+                        final ctrl = _controllers[siswa.keanggotaanId]!;
+                        final nilaiVal = double.tryParse(ctrl.text.trim());
+                        final isUnderKkm = nilaiVal != null && nilaiVal < _kkm;
 
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${siswa['no']}.',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SiswaFormScreen(
-                                  namaLengkap: siswa['nama'],
-                                  nis: siswa['nis'],
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              children: [
+                                Text(
+                                  '${index + 1}.',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                siswa['nama'],
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Text(
-                                    'NIS: ${siswa['nis']}',
-                                    style: AppTheme.tabularNumberStyle.copyWith(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                      fontWeight: FontWeight.normal,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SiswaFormScreen(
+                                            siswaId: siswa.siswaId,
+                                            namaLengkap: siswa.namaLengkap,
+                                            nis: siswa.nis,
+                                          ),
+                                        ),
+                                      ).then((_) => _loadNilaiData());
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          siswa.namaLengkap,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'NIS: ${siswa.nis}',
+                                              style: AppTheme.tabularNumberStyle.copyWith(
+                                                fontSize: 12,
+                                                color: AppColors.textSecondary,
+                                                fontWeight: FontWeight.normal,
+                                              ),
+                                            ),
+                                            if (siswa.isBawaanRombelAsal) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryContainer,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: const Text(
+                                                  'Bawaan rombel asal',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  if (siswa['sumber'] != null) ...[
-                                    const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primaryContainer,
-                                        borderRadius: BorderRadius.circular(4),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.textSecondary),
+                                  tooltip: 'Pindah Rombel',
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (_) => PindahRombelDialog(
+                                        siswaNama: siswa.namaLengkap,
+                                        rombelAsalNama: '7A',
+                                        daftarRombelTujuan: const ['7B', '8A', '9A'],
+                                        onConfirm: (tujuan, bawa) async {
+                                          try {
+                                            final rombelRepo = ref.read(rombelRepoProvider);
+                                            final user = ref.read(currentUserProvider);
+                                            final deviceId = ref.read(activeDeviceIdProvider);
+                                            final targetRombelId = 'rombel-${tujuan.toLowerCase()}';
+
+                                            await rombelRepo.pindahRombel(
+                                              siswaId: siswa.siswaId,
+                                              rombelLamaId: 'rombel-7a',
+                                              rombelBaruId: targetRombelId,
+                                              semesterId: 'sem-2026-ganjil',
+                                              bawaNilai: bawa,
+                                              guruId: user.guruId ?? 'guru-001',
+                                              deviceId: deviceId,
+                                            );
+
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('${siswa.namaLengkap} dipindahkan ke $tujuan')),
+                                              );
+                                              _loadNilaiData();
+                                              ref.invalidate(kelasSayaSummaryProvider);
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(content: Text('Gagal pindah rombel: $e')),
+                                              );
+                                            }
+                                          }
+                                        },
                                       ),
-                                      child: Text(
-                                        siswa['sumber'],
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.primary,
+                                    );
+                                  },
+                                ),
+                                // Input Nilai Cepat Rata Tengah Tabular Figures
+                                SizedBox(
+                                  width: 72,
+                                  height: 44,
+                                  child: TextFormField(
+                                    controller: ctrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textAlign: TextAlign.center,
+                                    textInputAction: TextInputAction.next,
+                                    style: AppTheme.tabularNumberStyle.copyWith(
+                                      fontSize: 16,
+                                      color: isUnderKkm ? AppColors.danger : AppColors.textPrimary,
+                                    ),
+                                    decoration: InputDecoration(
+                                      contentPadding: EdgeInsets.zero,
+                                      fillColor: isUnderKkm ? AppColors.dangerSoft : AppColors.surface,
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: isUnderKkm ? AppColors.danger : AppColors.outline,
+                                          width: isUnderKkm ? 1.5 : 1.0,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: isUnderKkm ? AppColors.danger : AppColors.primary,
+                                          width: 2.0,
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.swap_horiz, size: 20, color: AppColors.textSecondary),
-                        tooltip: 'Pindah Rombel',
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => PindahRombelDialog(
-                              siswaNama: siswa['nama'],
-                              rombelAsalNama: '7A',
-                              daftarRombelTujuan: const ['7B', '7C', '8A'],
-                              onConfirm: (tujuan, bawa) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${siswa['nama']} dipindahkan ke $tujuan (Bawa nilai: $bawa)')),
-                                );
-                              },
-                            ),
-                          );
-                        },
-                      ),
-                      // Input Nilai Cepat Rata Tengah Tabular Figures
-                      SizedBox(
-                        width: 72,
-                        height: 44,
-                        child: TextFormField(
-                          initialValue: siswa['nilai'],
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          textAlign: TextAlign.center,
-                          textInputAction: TextInputAction.next,
-                          style: AppTheme.tabularNumberStyle.copyWith(
-                            fontSize: 16,
-                            color: isUnderKkm ? AppColors.danger : AppColors.textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            contentPadding: EdgeInsets.zero,
-                            fillColor: isUnderKkm ? AppColors.dangerSoft : AppColors.surface,
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(
-                                color: isUnderKkm ? AppColors.danger : AppColors.outline,
-                                width: isUnderKkm ? 1.5 : 1.0,
-                              ),
+                                    onFieldSubmitted: (val) => _simpanNilai(siswa, val),
+                                    onChanged: (val) {
+                                      setState(() {});
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          onChanged: (val) {
-                            setState(() {
-                              siswa['nilai'] = val;
-                            });
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );
   }
 }
 
-/// Tab 3: One-Tap Attendance (PRD F13 & UI Guideline 5.4)
-class AbsensiCepatTab extends StatefulWidget {
+/// Tab 3: One-Tap Attendance (Terkoneksi langsung ke AbsensiRepository Drift DB)
+class AbsensiCepatTab extends ConsumerStatefulWidget {
   const AbsensiCepatTab({super.key});
 
   @override
-  State<AbsensiCepatTab> createState() => _AbsensiCepatTabState();
+  ConsumerState<AbsensiCepatTab> createState() => _AbsensiCepatTabState();
 }
 
-class _AbsensiCepatTabState extends State<AbsensiCepatTab> {
-  final List<Map<String, dynamic>> _absensiList = [
-    {'nama': 'Ahmad Fauzi Ridwan', 'status': 'H'},
-    {'nama': 'Bilqis Nur Azizah', 'status': 'S'},
-    {'nama': 'Dian Muhammad Irfan', 'status': 'H'},
-    {'nama': 'Farah Nabila Putri', 'status': 'I'},
-    {'nama': 'Genta Pratama', 'status': 'A'},
-  ];
+class _AbsensiCepatTabState extends ConsumerState<AbsensiCepatTab> {
+  final DateTime _today = DateTime.now();
+  List<SiswaAbsensiItem> _items = [];
+  bool _isLoading = true;
 
-  void _setAllHadir() {
-    HapticFeedback.lightImpact();
-    setState(() {
-      for (final item in _absensiList) {
-        item['status'] = 'H';
-      }
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAbsensiData();
     });
+  }
+
+  Future<void> _loadAbsensiData() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(absensiRepoProvider);
+      final list = await repo.getAbsensiByTanggal(
+        rombelId: 'rombel-7a',
+        semesterId: 'sem-2026-ganjil',
+        tanggal: _today,
+      );
+      _items = list;
+    } catch (e) {
+      debugPrint('[AbsensiCepatTab] Error loading data: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _setAllHadir() async {
+    HapticFeedback.lightImpact();
+    try {
+      final repo = ref.read(absensiRepoProvider);
+      final user = ref.read(currentUserProvider);
+      final deviceId = ref.read(activeDeviceIdProvider);
+
+      await repo.setSemuaHadir(
+        rombelId: 'rombel-7a',
+        semesterId: 'sem-2026-ganjil',
+        tanggal: _today,
+        userId: user.userId,
+        deviceId: deviceId,
+      );
+
+      _loadAbsensiData();
+    } catch (e) {
+      debugPrint('[AbsensiCepatTab] Error setting all hadir: $e');
+    }
+  }
+
+  Future<void> _setStatus(SiswaAbsensiItem item, String status) async {
+    HapticFeedback.lightImpact();
+    try {
+      final repo = ref.read(absensiRepoProvider);
+      final user = ref.read(currentUserProvider);
+      final deviceId = ref.read(activeDeviceIdProvider);
+
+      await repo.setStatusAbsensi(
+        keanggotaanId: item.keanggotaanId,
+        semesterId: 'sem-2026-ganjil',
+        tanggal: _today,
+        status: status,
+        userId: user.userId,
+        deviceId: deviceId,
+      );
+
+      _loadAbsensiData();
+    } catch (e) {
+      debugPrint('[AbsensiCepatTab] Error setting status: $e');
+    }
   }
 
   @override
@@ -679,7 +869,7 @@ class _AbsensiCepatTabState extends State<AbsensiCepatTab> {
                         MaterialPageRoute(
                           builder: (_) => const InputAbsensiScreen(rombelNama: '7A'),
                         ),
-                      );
+                      ).then((_) => _loadAbsensiData());
                     },
                   ),
                   const SizedBox(width: 4),
@@ -698,97 +888,98 @@ class _AbsensiCepatTabState extends State<AbsensiCepatTab> {
             ],
           ),
         ),
-        const Divider(),
+        const Divider(height: 1),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: _absensiList.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, idx) {
-              final item = _absensiList[idx];
-              final status = item['status'];
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _items.isEmpty
+                  ? const Center(child: Text('Tidak ada siswa aktif di rombel ini'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, idx) {
+                        final item = _items[idx];
+                        final status = item.status;
 
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item['nama'],
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      // Segmented Pill [ H ] [ S ] [ I ] [ A ]
-                      Row(
-                        children: ['H', 'S', 'I', 'A'].map((pill) {
-                          final isSelected = status == pill;
-                          Color pillColor = AppColors.surfaceVariant;
-                          Color textColor = AppColors.textSecondary;
-
-                          if (isSelected) {
-                            switch (pill) {
-                              case 'H':
-                                pillColor = AppColors.primary;
-                                textColor = Colors.white;
-                                break;
-                              case 'S':
-                                pillColor = AppColors.info;
-                                textColor = Colors.white;
-                                break;
-                              case 'I':
-                                pillColor = AppColors.warning;
-                                textColor = Colors.white;
-                                break;
-                              case 'A':
-                                pillColor = AppColors.danger;
-                                textColor = Colors.white;
-                                break;
-                            }
-                          }
-
-                          return Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                setState(() => item['status'] = pill);
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 34,
-                                height: 34,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: pillColor,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: isSelected ? Colors.transparent : AppColors.outline,
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.namaLengkap,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                                child: Text(
-                                  pill,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: textColor,
-                                  ),
+                                // Segmented Pill [ H ] [ S ] [ I ] [ A ]
+                                Row(
+                                  children: ['H', 'S', 'I', 'A'].map((pill) {
+                                    final isSelected = status == pill;
+                                    Color pillColor = AppColors.surfaceVariant;
+                                    Color textColor = AppColors.textSecondary;
+
+                                    if (isSelected) {
+                                      switch (pill) {
+                                        case 'H':
+                                          pillColor = AppColors.primary;
+                                          textColor = Colors.white;
+                                          break;
+                                        case 'S':
+                                          pillColor = AppColors.info;
+                                          textColor = Colors.white;
+                                          break;
+                                        case 'I':
+                                          pillColor = AppColors.warning;
+                                          textColor = Colors.white;
+                                          break;
+                                        case 'A':
+                                          pillColor = AppColors.danger;
+                                          textColor = Colors.white;
+                                          break;
+                                      }
+                                    }
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(6),
+                                        onTap: () => _setStatus(item, pill),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 150),
+                                          width: 34,
+                                          height: 34,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            color: pillColor,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isSelected ? Colors.transparent : AppColors.outline,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            pill,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
-                              ),
+                              ],
                             ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+                          ),
+                        );
+                      },
+                    ),
         ),
       ],
     );
@@ -849,7 +1040,7 @@ class PengaturanTab extends StatelessWidget {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 SizedBox(height: 8),
-                Text('Device ID: d8a1-4b2c-9910', style: TextStyle(fontSize: 13)),
+                Text('Device ID: mobile-dev-001', style: TextStyle(fontSize: 13)),
                 SizedBox(height: 4),
                 Text('Versi Aplikasi: v1.5.0-offline', style: TextStyle(fontSize: 13)),
                 SizedBox(height: 4),

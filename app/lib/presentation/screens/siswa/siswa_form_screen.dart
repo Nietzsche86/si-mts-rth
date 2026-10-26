@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/db/app_database.dart';
+import '../../../data/providers/database_providers.dart';
 
-class SiswaFormScreen extends StatefulWidget {
+class SiswaFormScreen extends ConsumerStatefulWidget {
   final String? siswaId;
   final String namaLengkap;
   final String nis;
@@ -20,10 +24,10 @@ class SiswaFormScreen extends StatefulWidget {
   });
 
   @override
-  State<SiswaFormScreen> createState() => _SiswaFormScreenState();
+  ConsumerState<SiswaFormScreen> createState() => _SiswaFormScreenState();
 }
 
-class _SiswaFormScreenState extends State<SiswaFormScreen> {
+class _SiswaFormScreenState extends ConsumerState<SiswaFormScreen> {
   int _currentSectionIndex = 0;
   final List<String> _sections = [
     'A. Data Diri',
@@ -47,16 +51,19 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
   late TextEditingController _kecamatanController;
   late TextEditingController _kabupatenController;
 
+  late String _selectedJk;
+  int _completenessPercentage = 80;
+
   // Sensitive unmask state
   bool _isNikUnmasked = false;
   int _unmaskRemainingSeconds = 0;
   Timer? _unmaskTimer;
-
   bool _hasWali = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedJk = widget.jk;
     _namaController = TextEditingController(text: widget.namaLengkap);
     _nisController = TextEditingController(text: widget.nis);
     _nisnController = TextEditingController(text: widget.nisn ?? '');
@@ -67,6 +74,48 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
     _desaController = TextEditingController(text: 'Kauman');
     _kecamatanController = TextEditingController(text: 'Semarang Tengah');
     _kabupatenController = TextEditingController(text: 'Kota Semarang');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileFromDb();
+    });
+  }
+
+  Future<void> _loadProfileFromDb() async {
+    if (widget.siswaId == null) return;
+    try {
+      final repo = ref.read(siswaRepoProvider);
+      final profile = await repo.getSiswaFullProfile(widget.siswaId!);
+      if (profile != null && mounted) {
+        setState(() {
+          _namaController.text = profile.siswa.namaLengkap;
+          _nisController.text = profile.siswa.nis;
+          _nisnController.text = profile.siswa.nisn ?? '';
+          _selectedJk = profile.siswa.jk;
+
+          final ayah = profile.ortuList.where((o) => o.hubungan == 'ayah').firstOrNull;
+          final ibu = profile.ortuList.where((o) => o.hubungan == 'ibu').firstOrNull;
+          final wali = profile.ortuList.where((o) => o.hubungan == 'wali').firstOrNull;
+
+          if (ayah != null) _ayahController.text = ayah.namaLengkap;
+          if (ibu != null) _ibuController.text = ibu.namaLengkap;
+          if (wali != null) {
+            _hasWali = true;
+            _waliController.text = wali.namaLengkap;
+          }
+
+          if (profile.alamat != null) {
+            _jalanController.text = profile.alamat!.jalan ?? '';
+            _desaController.text = profile.alamat!.desaNama ?? '';
+            _kecamatanController.text = profile.alamat!.kecamatanNama ?? '';
+            _kabupatenController.text = profile.alamat!.kabupatenNama ?? '';
+          }
+
+          _completenessPercentage = profile.completenessPercentage;
+        });
+      }
+    } catch (e) {
+      debugPrint('[SiswaForm] Error loading profile: $e');
+    }
   }
 
   @override
@@ -85,12 +134,28 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
     super.dispose();
   }
 
-  void _unmaskSensitiveData() {
+  Future<void> _unmaskSensitiveData() async {
     HapticFeedback.heavyImpact();
     setState(() {
       _isNikUnmasked = true;
       _unmaskRemainingSeconds = 15;
     });
+
+    // Catat ke Audit Log sesuai PRD
+    try {
+      final repo = ref.read(siswaRepoProvider);
+      final user = ref.read(currentUserProvider);
+      final deviceId = ref.read(activeDeviceIdProvider);
+
+      await repo.logSensitifAccess(
+        siswaId: widget.siswaId ?? 'siswa-001',
+        kolom: 'nik_siswa',
+        userId: user.userId,
+        deviceId: deviceId,
+      );
+    } catch (e) {
+      debugPrint('[SiswaForm] Error logging sensitive access: $e');
+    }
 
     _unmaskTimer?.cancel();
     _unmaskTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -128,6 +193,141 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
     );
   }
 
+  Future<void> _simpanData() async {
+    HapticFeedback.mediumImpact();
+    final now = DateTime.now();
+    final nowEpoch = BigInt.from(now.toUtc().millisecondsSinceEpoch);
+    final nowMs = now.toUtc().millisecondsSinceEpoch;
+
+    final user = ref.read(currentUserProvider);
+    final deviceId = ref.read(activeDeviceIdProvider);
+    final repo = ref.read(siswaRepoProvider);
+
+    final id = widget.siswaId ?? 'siswa-${_nisController.text}';
+    final isWali = user.isWaliKelas;
+
+    // Pelacakan kolom_ts per field (PRD 9.6)
+    final tsJson = jsonEncode({
+      'nama_lengkap': nowMs,
+      'nis': nowMs,
+      'nisn': nowMs,
+      'jk': nowMs,
+      'updated_at': nowMs,
+    });
+
+    final siswaData = SiswaData(
+      id: id,
+      nis: _nisController.text.trim(),
+      nisn: _nisnController.text.trim().isNotEmpty ? _nisnController.text.trim() : null,
+      namaLengkap: _namaController.text.trim(),
+      jk: _selectedJk,
+      statusAktif: 'aktif',
+      diubahWaliKelas: isWali ? 1 : 0,
+      createdAt: nowEpoch,
+      updatedAt: nowEpoch,
+      deleted: 0,
+      deviceId: deviceId,
+    );
+
+    final detailData = SiswaDetailData(
+      id: 'detail-$id',
+      siswaId: id,
+      penerimaKip: 0,
+      penerimaKps: 0,
+      penerimaPkh: 0,
+      diubahWaliKelas: isWali ? 1 : 0,
+      kolomTs: tsJson,
+      createdAt: nowEpoch,
+      updatedAt: nowEpoch,
+      deleted: 0,
+      deviceId: deviceId,
+    );
+
+    final ortuList = <SiswaOrtuData>[
+      SiswaOrtuData(
+        id: 'ortu-ayah-$id',
+        siswaId: id,
+        hubungan: 'ayah',
+        namaLengkap: _ayahController.text.trim(),
+        diubahWaliKelas: isWali ? 1 : 0,
+        kolomTs: tsJson,
+        createdAt: nowEpoch,
+        updatedAt: nowEpoch,
+        deleted: 0,
+        deviceId: deviceId,
+      ),
+      SiswaOrtuData(
+        id: 'ortu-ibu-$id',
+        siswaId: id,
+        hubungan: 'ibu',
+        namaLengkap: _ibuController.text.trim(),
+        diubahWaliKelas: isWali ? 1 : 0,
+        kolomTs: tsJson,
+        createdAt: nowEpoch,
+        updatedAt: nowEpoch,
+        deleted: 0,
+        deviceId: deviceId,
+      ),
+    ];
+
+    if (_hasWali && _waliController.text.trim().isNotEmpty) {
+      ortuList.add(
+        SiswaOrtuData(
+          id: 'ortu-wali-$id',
+          siswaId: id,
+          hubungan: 'wali',
+          namaLengkap: _waliController.text.trim(),
+          diubahWaliKelas: isWali ? 1 : 0,
+          kolomTs: tsJson,
+          createdAt: nowEpoch,
+          updatedAt: nowEpoch,
+          deleted: 0,
+          deviceId: deviceId,
+        ),
+      );
+    }
+
+    final alamatData = AlamatData(
+      id: 'alamat-$id',
+      pemilikTipe: 'siswa',
+      pemilikId: id,
+      siswaId: id,
+      jalan: _jalanController.text.trim(),
+      desaNama: _desaController.text.trim(),
+      kecamatanNama: _kecamatanController.text.trim(),
+      kabupatenNama: _kabupatenController.text.trim(),
+      diubahWaliKelas: isWali ? 1 : 0,
+      kolomTs: tsJson,
+      createdAt: nowEpoch,
+      updatedAt: nowEpoch,
+      deleted: 0,
+      deviceId: deviceId,
+    );
+
+    try {
+      await repo.saveSiswaProfile(
+        siswa: siswaData,
+        detail: detailData,
+        ortuList: ortuList,
+        alamat: alamatData,
+      );
+
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perubahan data siswa berhasil disimpan ke database lokal & antrean outbox')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[SiswaForm] Error saving profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan: $e'), backgroundColor: const Color(0xFFDC2626)),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,13 +335,7 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
         title: Text(widget.namaLengkap.isNotEmpty ? widget.namaLengkap : 'Input Siswa Baru'),
         actions: [
           IconButton(
-            onPressed: () {
-              HapticFeedback.mediumImpact();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Perubahan data siswa berhasil disimpan ke database lokal')),
-              );
-            },
+            onPressed: _simpanData,
             icon: const Icon(Icons.check_rounded),
             tooltip: 'Simpan',
           ),
@@ -169,9 +363,9 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
                         color: AppTheme.mintSurface,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        '85% Lengkap',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.emeraldPrimary),
+                      child: Text(
+                        '$_completenessPercentage% Lengkap',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.emeraldPrimary),
                       ),
                     ),
                   ],
@@ -179,11 +373,11 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: const LinearProgressIndicator(
-                    value: 0.85,
+                  child: LinearProgressIndicator(
+                    value: _completenessPercentage / 100.0,
                     minHeight: 6,
-                    backgroundColor: Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.emeraldPrimary),
+                    backgroundColor: const Color(0xFFE2E8F0),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.emeraldPrimary),
                   ),
                 ),
               ],
@@ -285,8 +479,12 @@ class _SiswaFormScreenState extends State<SiswaFormScreen> {
             ButtonSegment(value: 'L', label: Text('Laki-laki')),
             ButtonSegment(value: 'P', label: Text('Perempuan')),
           ],
-          selected: {widget.jk},
-          onSelectionChanged: (_) {},
+          selected: {_selectedJk},
+          onSelectionChanged: (setVal) {
+            setState(() {
+              _selectedJk = setVal.first;
+            });
+          },
         ),
       ],
     );

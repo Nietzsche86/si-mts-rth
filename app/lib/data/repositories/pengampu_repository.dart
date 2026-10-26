@@ -5,6 +5,38 @@ import '../sync/outbox_manager.dart';
 
 enum ModePembagianKelompok { ganjilGenap, rata }
 
+class PengampuSummaryItem {
+  final String pengampuId;
+  final String rombelId;
+  final String rombelNama;
+  final String mapelId;
+  final String mapelNama;
+  final String peran; // 'utama' | 'pendamping'
+  final bool isUtama;
+  final String cakupan; // 'seluruh' | 'sebagian'
+  final int totalSiswa;
+  final int belumDikelompokkanCount;
+  final String cakupanText;
+  final String progressText;
+  final double progressValue;
+
+  const PengampuSummaryItem({
+    required this.pengampuId,
+    required this.rombelId,
+    required this.rombelNama,
+    required this.mapelId,
+    required this.mapelNama,
+    required this.peran,
+    required this.isUtama,
+    required this.cakupan,
+    required this.totalSiswa,
+    this.belumDikelompokkanCount = 0,
+    required this.cakupanText,
+    required this.progressText,
+    required this.progressValue,
+  });
+}
+
 class PengampuRepository {
   final AppDatabase db;
   final OutboxManager outbox;
@@ -174,5 +206,139 @@ class PengampuRepository {
         await outbox.enqueue(tabel: 'pengampu_siswa', recordId: psId, operasi: 'INSERT');
       }
     });
+  }
+
+  /// Mengambil daftar pengampu aktif untuk seorang guru pada semester aktif beserta ringkasan progres
+  Future<List<PengampuSummaryItem>> getPengampuSummaryForGuru({
+    required String guruId,
+    required String semesterId,
+  }) async {
+    // 1. Ambil semua pengampu aktif untuk guru
+    final query = db.select(db.pengampu).join([
+      innerJoin(db.rombel, db.rombel.id.equalsExp(db.pengampu.rombelId)),
+      innerJoin(db.mapel, db.mapel.id.equalsExp(db.pengampu.mapelId)),
+    ])
+      ..where(
+        db.pengampu.guruId.equals(guruId) &
+            db.pengampu.semesterId.equals(semesterId) &
+            db.pengampu.tanggalSelesai.isNull() &
+            db.pengampu.deleted.equals(0) &
+            db.rombel.deleted.equals(0) &
+            db.mapel.deleted.equals(0),
+      )
+      ..orderBy([OrderingTerm.asc(db.rombel.nama), OrderingTerm.asc(db.mapel.nama)]);
+
+    final rows = await query.get();
+    final result = <PengampuSummaryItem>[];
+
+    for (final r in rows) {
+      final p = r.readTable(db.pengampu);
+      final rombel = r.readTable(db.rombel);
+      final mapel = r.readTable(db.mapel);
+
+      final isUtama = p.peran == 'utama';
+      final siswaList = await getSiswaForPengampu(
+        pengampuId: p.id,
+        rombelId: p.rombelId,
+        semesterId: semesterId,
+      );
+      final totalSiswa = siswaList.length;
+
+      // Hitung unassigned fallback count jika Guru Utama & cakupan sebagian
+      int belumDikelompokkanCount = 0;
+      if (isUtama && p.cakupan == 'sebagian') {
+        final allKeanggotaan = await (db.select(db.keanggotaanRombel)
+              ..where((t) =>
+                  t.rombelId.equals(p.rombelId) &
+                  t.tanggalKeluar.isNull() &
+                  t.deleted.equals(0)))
+            .get();
+
+        final allPengampuIds = (await (db.select(db.pengampu)
+                  ..where((t) =>
+                      t.rombelId.equals(p.rombelId) &
+                      t.mapelId.equals(p.mapelId) &
+                      t.semesterId.equals(semesterId) &
+                      t.tanggalSelesai.isNull() &
+                      t.deleted.equals(0)))
+                .get())
+            .map((e) => e.id)
+            .toList();
+
+        final groupedKeanggotaan = (await (db.select(db.pengampuSiswa)
+                  ..where((t) => t.pengampuId.isIn(allPengampuIds) & t.deleted.equals(0)))
+                .get())
+            .map((ps) => ps.keanggotaanId)
+            .toSet();
+
+        belumDikelompokkanCount = allKeanggotaan.where((k) => !groupedKeanggotaan.contains(k.id)).length;
+      }
+
+      // Cakupan text
+      String cakupanText;
+      if (p.cakupan == 'seluruh') {
+        cakupanText = 'Seluruh kelas • $totalSiswa Siswa';
+      } else {
+        if (isUtama && belumDikelompokkanCount > 0) {
+          final kelompokSaya = totalSiswa - belumDikelompokkanCount;
+          cakupanText = 'Kelompok Saya • $kelompokSaya Siswa (+$belumDikelompokkanCount belum dikelompokkan)';
+        } else {
+          cakupanText = 'Kelompok Khusus • $totalSiswa Siswa';
+        }
+      }
+
+      // Progress entri nilai
+      final siswaIds = siswaList.map((s) => s.id).toSet();
+      int terisiCount = 0;
+
+      if (siswaIds.isNotEmpty) {
+        final keanggotaanAktif = await (db.select(db.keanggotaanRombel)
+              ..where((t) =>
+                  t.rombelId.equals(p.rombelId) &
+                  t.siswaId.isIn(siswaIds) &
+                  t.tanggalKeluar.isNull() &
+                  t.deleted.equals(0)))
+            .get();
+        final keanggotaanIds = keanggotaanAktif.map((k) => k.id).toList();
+
+        if (keanggotaanIds.isNotEmpty) {
+          final nilaiRows = await (db.select(db.nilai)
+                ..where((t) =>
+                    t.mapelId.equals(p.mapelId) &
+                    t.semesterId.equals(semesterId) &
+                    t.keanggotaanId.isIn(keanggotaanIds) &
+                    t.deleted.equals(0)))
+              .get();
+          final siswaDenganNilai = nilaiRows.map((n) => n.keanggotaanId).toSet();
+          terisiCount = siswaDenganNilai.length;
+        }
+      }
+
+      final progressVal = totalSiswa > 0 ? (terisiCount / totalSiswa).clamp(0.0, 1.0) : 0.0;
+      final progressPercent = (progressVal * 100).toInt();
+      final progressText = totalSiswa > 0
+          ? 'Nilai terisi $terisiCount/$totalSiswa siswa — $progressPercent%'
+          : 'Belum ada siswa';
+
+      result.add(
+        PengampuSummaryItem(
+          pengampuId: p.id,
+          rombelId: rombel.id,
+          rombelNama: rombel.nama,
+          mapelId: mapel.id,
+          mapelNama: mapel.nama,
+          peran: p.peran,
+          isUtama: isUtama,
+          cakupan: p.cakupan,
+          totalSiswa: totalSiswa,
+          belumDikelompokkanCount: belumDikelompokkanCount,
+          cakupanText: cakupanText,
+          progressText: progressText,
+          progressValue: progressVal,
+        ),
+      );
+    }
+
+    return result;
   }
 }

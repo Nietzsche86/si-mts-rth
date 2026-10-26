@@ -11,7 +11,7 @@
 |---|---|:---:|:---:|
 | **CP-0** | Fondasi Monorepo, Golden Schema, Engine Sync, CI/CD Android | **SELESAI (100%)** | 2026-10-26 |
 | **CP-1** | Penegakan Hak Push Server (PRD 9.6) & Data Master Seeder | **SELESAI (100%)** | 2026-10-26 |
-| **CP-2** | Integrasi Penuh Layar UI Flutter ke Database Drift SQLite | **BELUM (0%)** | - |
+| **CP-2** | Integrasi Penuh Layar UI Flutter ke Database Drift SQLite | **SELESAI (100%)** | 2026-10-26 |
 | **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **BELUM (0%)** | - |
 | **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **BELUM (0%)** | - |
 | **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **BELUM (0%)** | - |
@@ -54,34 +54,34 @@ Target: Server FastAPI menolak pelanggaran hak akses saat sync push dan memiliki
 
 ---
 
-## Checkpoint 2: Integrasi Layar UI Flutter ke Database Drift SQLite Lokal
+## Checkpoint 2: Integrasi Layar UI Flutter ke Database Drift SQLite Lokal (SUDAH SELESAI)
 Target: Seluruh antarmuka Flutter tidak lagi memakai data tiruan (*mock*), melainkan terhubung langsung ke SQLite terenkripsi.
 
-- [ ] **2.1 State Management & Dependency Injection (Riverpod):**
-  - [ ] Buat `database_provider.dart` untuk instance `AppDatabase` tunggal.
-  - [ ] Provider repositori: `siswaRepoProvider`, `penilaianRepoProvider`, `absensiRepoProvider`, `rombelRepoProvider`, `pengampuRepoProvider`.
-  - [ ] Provider user session aktif (`currentUserProvider`, `activeSemesterProvider`).
-- [ ] **2.2 Sambungkan Beranda "Kelas Saya" (`main.dart`):**
-  - [ ] Query daftar pengampu aktif guru dari `PengampuRepository`.
-  - [ ] Tampilkan kartu kelas dinamis dengan hitungan siswa riil dari SQLite.
-  - [ ] Tampilkan *progress bar* persentase entri nilai riil.
-  - [ ] Tampilkan chip "+X belum dikelompokkan" jika guru adalah Guru Utama dan terdapat siswa *fallback*.
-- [ ] **2.3 Sambungkan Layar Input Nilai Cepat (`input_nilai_screen.dart`):**
-  - [ ] Muat daftar siswa aktif di rombel terpilih dari `KeanggotaanRombel` & `Siswa`.
-  - [ ] Tampilkan nilai yang tersimpan untuk jenis dan urutan penilaian terpilih (`TGS`, `UH`, dst.).
-  - [ ] Simpan otomatis ke SQLite + antrean `outbox` saat input berpindah (`FocusNode` / tombol *Next*).
-  - [ ] Validasi visual: kotak merah muda `#FEE2E2` jika `< KKM`, getar jika `> 100` atau `< 0`.
-  - [ ] Tampilkan badge `Bawaan rombel asal` jika `sumber_nilai_id != null`.
-- [ ] **2.4 Sambungkan Layar Absensi Harian (`input_absensi_screen.dart`):**
-  - [ ] Muat daftar kehadiran siswa sesuai tanggal yang dipilih.
-  - [ ] Tombol `Set Semua Hadir (H)` memperbarui seluruh siswa dan memasukkan perubahan ke `outbox`.
-  - [ ] Segmented pill `[H] [S] [I] [A]` menyimpan status individual ke SQLite seketika.
-- [ ] **2.5 Sambungkan Form Siswa Modular A–G (`siswa_form_screen.dart`):**
-  - [ ] Muat profil lengkap (`siswa`, `siswa_detail`, `siswa_ortu`, `alamat`, `siswa_sensitif`).
-  - [ ] Simpan perubahan dengan pelacakan `kolom_ts` per field.
-  - [ ] Timer 15 detik unmasking NIK/KK mencatat event ke `audit_log`.
-- [ ] **2.6 Verifikasi:**
-  - [ ] Jalankan `flutter test` dan pastikan seluruh test widget & integrasi lolos 100%.
+- [x] **2.1 State Management & Dependency Injection (Riverpod):**
+  - [x] Buat `database_providers.dart` untuk instance `AppDatabase` tunggal & seeder idempoten.
+  - [x] Provider repositori: `siswaRepoProvider`, `penilaianRepoProvider`, `absensiRepoProvider`, `rombelRepoProvider`, `pengampuRepoProvider`.
+  - [x] Provider user session aktif (`currentUserProvider`, `activeSemesterProvider`, `pendingOutboxCountProvider`).
+- [x] **2.2 Sambungkan Beranda "Kelas Saya" (`main.dart`):**
+  - [x] Query daftar pengampu aktif guru dari `PengampuRepository.getPengampuSummaryForGuru`.
+  - [x] Tampilkan kartu kelas dinamis dengan hitungan siswa riil dari SQLite.
+  - [x] Tampilkan *progress bar* persentase entri nilai riil.
+  - [x] Tampilkan chip "+X belum dikelompokkan" jika guru adalah Guru Utama dan terdapat siswa *fallback*.
+- [x] **2.3 Sambungkan Layar Input Nilai Cepat (`input_nilai_screen.dart`):**
+  - [x] Muat daftar siswa aktif di rombel terpilih dari `KeanggotaanRombel` & `Siswa`.
+  - [x] Tampilkan nilai yang tersimpan untuk jenis dan urutan penilaian terpilih (`TGS`, `UH`, dst.).
+  - [x] Simpan otomatis ke SQLite + antrean `outbox` saat input berpindah (`FocusNode` / tombol *Next*).
+  - [x] Validasi visual: kotak merah muda `#FEE2E2` jika `< KKM`, getar jika `> 100` atau `< 0`.
+  - [x] Tampilkan badge `Bawaan rombel asal` jika `sumber_nilai_id != null`.
+- [x] **2.4 Sambungkan Layar Absensi Harian (`input_absensi_screen.dart`):**
+  - [x] Muat daftar kehadiran siswa sesuai tanggal yang dipilih.
+  - [x] Tombol `Set Semua Hadir (H)` memperbarui seluruh siswa dan memasukkan perubahan ke `outbox`.
+  - [x] Segmented pill `[H] [S] [I] [A]` menyimpan status individual ke SQLite seketika.
+- [x] **2.5 Sambungkan Form Siswa Modular A–G (`siswa_form_screen.dart`):**
+  - [x] Muat profil lengkap (`siswa`, `siswa_detail`, `siswa_ortu`, `alamat`, `siswa_sensitif`).
+  - [x] Simpan perubahan dengan pelacakan `kolom_ts` per field.
+  - [x] Timer 15 detik unmasking NIK/KK mencatat event ke `audit_log`.
+- [x] **2.6 Verifikasi:**
+  - [x] Jalankan `flutter test` dan pastikan seluruh test widget & integrasi lolos 100% (17/17 tests passing).
 
 ---
 
