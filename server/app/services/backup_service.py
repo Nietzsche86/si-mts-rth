@@ -4,7 +4,7 @@ import json
 import zipfile
 import shutil
 import hashlib
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 from datetime import datetime, timezone
 from sqlmodel import Session, text
 
