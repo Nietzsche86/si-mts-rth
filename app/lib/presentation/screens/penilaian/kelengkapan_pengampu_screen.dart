@@ -103,8 +103,9 @@ class _KelengkapanPengampuScreenState extends ConsumerState<KelengkapanPengampuS
               border: Border(bottom: BorderSide(color: AppColors.outline, width: 1)),
             ),
             child: DropdownButtonFormField<String?>(
+              key: ValueKey('filter_rombel_$currentSelectedRombel'),
               isExpanded: true,
-              value: currentSelectedRombel,
+              initialValue: currentSelectedRombel,
               decoration: const InputDecoration(
                 labelText: 'Filter Rombel',
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

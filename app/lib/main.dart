@@ -20,6 +20,8 @@ import 'presentation/screens/penilaian/rekap_nilai_screen.dart';
 import 'presentation/screens/penilaian/kelengkapan_pengampu_screen.dart';
 import 'presentation/screens/dashboard/kepala_dashboard_screen.dart';
 import 'presentation/screens/absensi/rekap_absensi_screen.dart';
+import 'presentation/screens/emis/emis_screen.dart';
+import 'presentation/screens/backup/backup_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1212,6 +1214,62 @@ class PengaturanTab extends ConsumerWidget {
                       },
                       icon: const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primary),
                       label: const Text('Rekap Absensi'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Menu Berkas Sandboxed, EMIS & Backup Terenkripsi (PRD F5, F15, F16)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.security_rounded, color: AppColors.primary, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Berkas Sandboxed, EMIS & Cadangan',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Kelola dokumen siswa berproteksi FLAG_SECURE, ekspor/impor EMIS Kemenag offline, dan buat cadangan database terenkripsi.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const EmisScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.import_export_rounded, size: 18),
+                      label: const Text('Ekspor/Impor EMIS'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const BackupScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.backup_rounded, size: 18, color: AppColors.primary),
+                      label: const Text('Cadangan Terenkripsi'),
                     ),
                   ],
                 ),

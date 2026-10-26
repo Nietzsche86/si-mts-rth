@@ -32,6 +32,14 @@ class RombelRepository {
         .get();
   }
 
+  /// Mengambil semua rombel aktif di madrasah
+  Future<List<RombelData>> getAllRombel() async {
+    return (db.select(db.rombel)
+          ..where((t) => t.deleted.equals(0))
+          ..orderBy([(t) => OrderingTerm.asc(t.tingkat), (t) => OrderingTerm.asc(t.nama)]))
+        .get();
+  }
+
   /// Mengambil daftar siswa aktif di suatu rombel
   Future<List<SiswaData>> getSiswaInRombel(String rombelId) async {
     final query = db.select(db.keanggotaanRombel).join([

@@ -219,8 +219,9 @@ class _RekapAbsensiScreenState extends ConsumerState<RekapAbsensiScreen> {
         children: [
           // Dropdown Rombel
           DropdownButtonFormField<String>(
+            key: ValueKey('rombel_$currentRombel'),
             isExpanded: true,
-            value: currentRombel,
+            initialValue: currentRombel,
             decoration: const InputDecoration(
               labelText: 'Pilih Rombel',
               contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

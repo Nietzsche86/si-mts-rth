@@ -186,8 +186,9 @@ class _RekapNilaiScreenState extends ConsumerState<RekapNilaiScreen> {
           Expanded(
             flex: 4,
             child: DropdownButtonFormField<String>(
+              key: ValueKey('rombel_$currentRombel'),
               isExpanded: true,
-              value: currentRombel,
+              initialValue: currentRombel,
               decoration: const InputDecoration(
                 labelText: 'Rombel',
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -213,8 +214,9 @@ class _RekapNilaiScreenState extends ConsumerState<RekapNilaiScreen> {
           Expanded(
             flex: 6,
             child: DropdownButtonFormField<String?>(
+              key: ValueKey('mapel_$currentMapel'),
               isExpanded: true,
-              value: currentMapel,
+              initialValue: currentMapel,
               decoration: const InputDecoration(
                 labelText: 'Mata Pelajaran',
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

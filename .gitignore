@@ -45,6 +45,7 @@ server/test_files/
 *.env
 *.keystore
 *.jks
+storage/
 
 # IDE & OS
 .idea/

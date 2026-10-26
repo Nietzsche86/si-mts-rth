@@ -15,7 +15,7 @@
 | **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **SELESAI (100%)** | 2026-10-26 |
 | **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **SELESAI (100%)** | 2026-10-26 |
 | **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **SELESAI (100%)** | 2026-10-26 |
-| **CP-6** | Sandboxed File Viewer (F5), Offline EMIS, & Backup Terenkripsi | **BELUM (0%)** | - |
+| **CP-6** | Sandboxed File Viewer (F5), Offline EMIS, & Backup Terenkripsi | **SELESAI (100%)** | 2026-10-26 |
 
 ---
 
@@ -157,18 +157,24 @@ Target: Rekapitulasi nilai otomatis sesuai kurikulum 2013 dan rekap kehadiran pe
 
 ---
 
-## Checkpoint 6: Berkas Siswa Sandboxed, Ekspor/Impor Offline, & Backup Terenkripsi
+## Checkpoint 6: Berkas Siswa Sandboxed, Ekspor/Impor Offline, & Backup Terenkripsi (SUDAH SELESAI)
 Target: Pengelolaan berkas aman, fallback import/export lokal, dan pemulihan bencana database.
 
-- [ ] **6.1 Berkas Siswa & Viewer Sandboxed (PRD F5):**
-  - [ ] Kompresi gambar kamera (±480 px, <100 KB) dan dokumen (<1 MB).
-  - [ ] Server endpoint `/api/v1/berkas/upload` dan download dengan dekripsi AES-256-GCM.
-  - [ ] Viewer PDF & Foto bawaan aplikasi dengan perlindungan `FLAG_SECURE`.
-- [ ] **6.2 Fallback Ekspor / Impor Lokal di HP (PRD F15):**
-  - [ ] Generator & parser CSV/Excel lokal pada perangkat saat tidak terhubung ke server operator.
-- [ ] **6.3 Backup & Restore Terenkripsi (PRD F16):**
-  - [ ] Endpoint/skrip server untuk membuat cadangan database SQLite WAL + seluruh berkas lampiran terenkripsi password (AES-256).
-  - [ ] Fitur verifikasi integritas backup dan restore database.
+- [x] **6.1 Berkas Siswa & Viewer Sandboxed (PRD F5):**
+  - [x] Kompresi gambar kamera (±480 px, <100 KB) dan dokumen (<1 MB) via `BerkasUtil`.
+  - [x] Server endpoint `/api/v1/berkas/upload` dan download dengan dekripsi AES-256-GCM, validasi magic bytes, dan audit log.
+  - [x] Viewer PDF & Foto bawaan aplikasi (`SandboxedViewerScreen`) dengan perlindungan `FLAG_SECURE` tanpa bagikan/simpan ke galeri publik.
+- [x] **6.2 Fallback Ekspor / Impor Lokal di HP (PRD F15):**
+  - [x] Generator & parser CSV/Excel lokal pada perangkat (`EmisCsvHelper` RFC-4180) saat tidak terhubung ke server operator.
+  - [x] Layar `EmisScreen` dengan pratinjau validasi baris, penyamaran NIK/KK, dan komit impor atomik ke SQLite lokal + antrean outbox.
+- [x] **6.3 Backup & Restore Terenkripsi (PRD F16):**
+  - [x] Endpoint server `/api/v1/backup/create` untuk membuat cadangan database SQLite WAL + seluruh berkas lampiran terenkripsi password (AES-256-GCM via PBKDF2).
+  - [x] Fitur verifikasi integritas backup (`/api/v1/backup/verify` dengan checksum SHA-256) dan restore database atomik (`/api/v1/backup/restore`).
+  - [x] Layar `BackupScreen` dengan jadwal pengingat cadangan berkala.
+- [x] **6.4 Verifikasi Otomatis:**
+  - [x] 4 test suite server di `server/tests/test_berkas_backup.py` lolos 100% (22/22 pytest passing).
+  - [x] 14 unit & widget test suite klien di `app/test/berkas_backup_test.dart` lolos 100% (56/56 flutter test passing).
+  - [x] `dart analyze lib test` melaporkan 0 error/issue (clean).
 
 ---
 

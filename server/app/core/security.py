@@ -5,6 +5,8 @@ import hashlib
 from typing import Optional, Union, Any
 from datetime import datetime, timedelta, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 
@@ -77,3 +79,39 @@ def compute_duplicate_hash(value: Optional[str]) -> Optional[str]:
     key = bytes.fromhex(settings.HMAC_SECRET_HEX)
     clean_val = value.strip()
     return hmac.new(key, clean_val.encode("utf-8"), hashlib.sha256).hexdigest()
+
+# ==============================================================================
+# Enkripsi & Dekripsi Berkas / Binary (AES-256-GCM) & KDF Password Backup
+# Format berkas terenkripsi: nonce_12 + ciphertext + tag_16
+# ==============================================================================
+
+def encrypt_bytes_aes_gcm(data: bytes, key: Optional[bytes] = None) -> bytes:
+    """Mengenkripsi binary bytes dengan AES-256-GCM."""
+    if key is None:
+        key = get_aes_key()
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, data, None)
+    return nonce + ciphertext
+
+def decrypt_bytes_aes_gcm(encrypted_data: bytes, key: Optional[bytes] = None) -> bytes:
+    """Mendekripsi binary bytes berformat nonce_12 + ciphertext + tag_16."""
+    if key is None:
+        key = get_aes_key()
+    if len(encrypted_data) < 28:
+        raise ValueError("Data terenkripsi tidak valid atau terlalu pendek (< 28 bytes)")
+    nonce = encrypted_data[:12]
+    ciphertext = encrypted_data[12:]
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(nonce, ciphertext, None)
+
+def derive_key_from_password(password: str, salt: bytes, iterations: int = 100_000) -> bytes:
+    """Menurunkan kunci AES 256-bit (32 bytes) dari password dan salt via PBKDF2-HMAC-SHA256."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=iterations,
+    )
+    return kdf.derive(password.encode("utf-8"))
+

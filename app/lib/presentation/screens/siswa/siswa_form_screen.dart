@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/db/app_database.dart';
 import '../../../data/providers/database_providers.dart';
+import '../berkas/berkas_siswa_screen.dart';
 
 class SiswaFormScreen extends ConsumerStatefulWidget {
   final String? siswaId;
@@ -657,7 +658,19 @@ class _SiswaFormScreenState extends ConsumerState<SiswaFormScreen> {
               const Text('Tersimpan di sandbox privat aplikasi', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
               const SizedBox(height: 12),
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () {
+                  if (widget.siswaId != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => BerkasSiswaScreen(
+                          siswaId: widget.siswaId!,
+                          namaSiswa: _namaController.text,
+                        ),
+                      ),
+                    );
+                  }
+                },
                 icon: const Icon(Icons.visibility, size: 16),
                 label: const Text('Buka Berkas Privat'),
               ),

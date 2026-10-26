@@ -9,6 +9,8 @@ from app.api.auth import router as auth_router
 from app.api.sync import router as sync_router
 from app.api.import_export import router as emis_router
 from app.api.akademik import router as akademik_router
+from app.api.berkas import router as berkas_router
+from app.api.backup import router as backup_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,6 +40,8 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(sync_router, prefix=settings.API_V1_STR)
 app.include_router(emis_router, prefix=settings.API_V1_STR)
 app.include_router(akademik_router, prefix=settings.API_V1_STR)
+app.include_router(berkas_router, prefix=settings.API_V1_STR)
+app.include_router(backup_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def healthcheck():

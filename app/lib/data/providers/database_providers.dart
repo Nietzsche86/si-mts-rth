@@ -17,6 +17,8 @@ import '../repositories/absensi_repository.dart';
 import '../repositories/rombel_repository.dart';
 import '../repositories/pengampu_repository.dart';
 import '../repositories/auth_repository.dart';
+import '../repositories/berkas_repository.dart';
+import '../repositories/emis_repository.dart';
 import 'package:dio/dio.dart';
 
 /// Membuka koneksi database SQLite fisik atau in-memory fallback
@@ -82,6 +84,20 @@ final pengampuRepoProvider = Provider<PengampuRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final outbox = ref.watch(outboxManagerProvider);
   return PengampuRepository(db, outbox);
+});
+
+/// Provider Repositori Berkas Siswa
+final berkasRepoProvider = Provider<BerkasRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final outbox = ref.watch(outboxManagerProvider);
+  return BerkasRepository(db: db, outbox: outbox);
+});
+
+/// Provider Repositori EMIS Import & Export
+final emisRepoProvider = Provider<EmisRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final outbox = ref.watch(outboxManagerProvider);
+  return EmisRepository(db: db, outbox: outbox);
 });
 
 /// Provider Secure Storage (Keystore)
