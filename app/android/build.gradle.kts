@@ -15,14 +15,11 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
-subprojects {
-    project.evaluationDependsOn(":app")
-}
 
 subprojects {
-    afterEvaluate {
-        if (project.hasProperty("android")) {
-            val android = project.extensions.findByName("android")
+    val configureAndroid: (Project) -> Unit = { proj ->
+        if (proj.hasProperty("android")) {
+            val android = proj.extensions.findByName("android")
             if (android != null) {
                 for (m in android.javaClass.methods) {
                     if (m.name in listOf("compileSdkVersion", "setCompileSdkVersion", "setCompileSdk") && m.parameterCount == 1) {
@@ -37,6 +34,18 @@ subprojects {
             }
         }
     }
+
+    if (project.state.executed) {
+        configureAndroid(project)
+    } else {
+        project.afterEvaluate {
+            configureAndroid(project)
+        }
+    }
+}
+
+subprojects {
+    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {

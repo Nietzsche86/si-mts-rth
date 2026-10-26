@@ -46,6 +46,19 @@ class OutboxManager {
   }
 
   /// Menghitung jumlah antrean outbox yang belum tersinkron
+  Future<int> enqueue({
+    required String tabel,
+    required String recordId,
+    required String operasi,
+    Map<String, dynamic> payload = const {},
+  }) async {
+    if (operasi == 'DELETE') {
+      return enqueueDelete(table: tabel, barisId: recordId, payload: payload);
+    }
+    return enqueueUpsert(table: tabel, barisId: recordId, payload: payload);
+  }
+
+  /// Menghitung jumlah antrean outbox yang belum tersinkron
   Future<int> getPendingCount() async {
     final countExp = db.outbox.localSeq.count();
     final query = db.selectOnly(db.outbox)..addColumns([countExp]);
