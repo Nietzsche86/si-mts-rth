@@ -1,0 +1,53 @@
+# Git Ignore untuk MTs App Monorepo
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/.gradle/
+app/android/local.properties
+app/android/app/release/
+app/android/app/build/
+*.lock
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+server/.venv/
+server/venv/
+.venv/
+env/
+server/__pycache__/
+server/*/__pycache__/
+server/*/*/__pycache__/
+server/.pytest_cache/
+server/*.db
+server/*.db-wal
+server/*.db-shm
+server/*.sqlite3
+server/uploads/
+server/storage/
+server/test_files/
+
+# Environment and Secrets
+.env
+*.env
+*.keystore
+*.jks
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store
