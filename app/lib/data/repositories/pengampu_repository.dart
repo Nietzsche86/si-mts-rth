@@ -5,6 +5,45 @@ import '../sync/outbox_manager.dart';
 
 enum ModePembagianKelompok { ganjilGenap, rata }
 
+enum JenisAnomaliPengampu {
+  mapelTanpaUtama,
+  siswaFallback,
+  siswaTumpangTindih,
+  guruNonaktif,
+}
+
+class AnomaliPengampu {
+  final JenisAnomaliPengampu jenis;
+  final String judul;
+  final String deskripsi;
+  final String tingkatKeparahan; // 'kritis' | 'peringatan'
+  final String? rombelId;
+  final String? rombelNama;
+  final String? mapelId;
+  final String? mapelNama;
+  final String? guruId;
+  final String? guruNama;
+  final int? jumlahSiswa;
+  final List<String> daftarSiswa;
+  final List<String> pengampuIds;
+
+  const AnomaliPengampu({
+    required this.jenis,
+    required this.judul,
+    required this.deskripsi,
+    required this.tingkatKeparahan,
+    this.rombelId,
+    this.rombelNama,
+    this.mapelId,
+    this.mapelNama,
+    this.guruId,
+    this.guruNama,
+    this.jumlahSiswa,
+    this.daftarSiswa = const [],
+    this.pengampuIds = const [],
+  });
+}
+
 class PengampuSummaryItem {
   final String pengampuId;
   final String rombelId;
@@ -179,6 +218,9 @@ class PengampuRepository {
       final now = DateTime.now();
       final nowEpoch = BigInt.from(now.toUtc().millisecondsSinceEpoch);
 
+      // Hapus alokasi lama untuk kelompok pengampu ini
+      await (db.delete(db.pengampuSiswa)..where((t) => t.pengampuId.isIn(pengampuIds))).go();
+
       for (int i = 0; i < keanggotaanList.length; i++) {
         final k = keanggotaanList[i];
         final String targetPengampuId;
@@ -189,7 +231,7 @@ class PengampuRepository {
         } else {
           // Mode Rata
           final chunkSize = (keanggotaanList.length / pengampuIds.length).ceil();
-          final groupIndex = (i ~/ chunkSize).clamp(0, pengampuIds.length - 1);
+          final groupIndex = (i ~/ (chunkSize > 0 ? chunkSize : 1)).clamp(0, pengampuIds.length - 1);
           targetPengampuId = pengampuIds[groupIndex];
         }
 
@@ -206,6 +248,204 @@ class PengampuRepository {
         await outbox.enqueue(tabel: 'pengampu_siswa', recordId: psId, operasi: 'INSERT');
       }
     });
+  }
+
+  /// Menyimpan pemetaan kelompok siswa manual atau kustom
+  Future<void> simpanPembagianKelompok({
+    required String rombelId,
+    required String mapelId,
+    required String semesterId,
+    required Map<String, List<String>> pengampuToKeanggotaanMap,
+    required String deviceId,
+  }) async {
+    final allPengampus = await (db.select(db.pengampu)
+          ..where((t) =>
+              t.rombelId.equals(rombelId) &
+              t.mapelId.equals(mapelId) &
+              t.semesterId.equals(semesterId) &
+              t.tanggalSelesai.isNull() &
+              t.deleted.equals(0)))
+        .get();
+    final pengampuIds = allPengampus.map((p) => p.id).toList();
+
+    await db.transaction(() async {
+      final now = DateTime.now();
+      final nowEpoch = BigInt.from(now.toUtc().millisecondsSinceEpoch);
+
+      // Hapus alokasi lama
+      await (db.delete(db.pengampuSiswa)..where((t) => t.pengampuId.isIn(pengampuIds))).go();
+
+      // Masukkan pemetaan baru
+      for (final entry in pengampuToKeanggotaanMap.entries) {
+        final targetPengampuId = entry.key;
+        for (final kId in entry.value) {
+          final psId = _uuid.v4();
+          final item = PengampuSiswaCompanion.insert(
+            id: psId,
+            pengampuId: targetPengampuId,
+            keanggotaanId: kId,
+            deviceId: deviceId,
+            createdAt: nowEpoch,
+            updatedAt: nowEpoch,
+          );
+          await db.into(db.pengampuSiswa).insert(item);
+          await outbox.enqueue(tabel: 'pengampu_siswa', recordId: psId, operasi: 'INSERT');
+        }
+      }
+    });
+  }
+
+  /// Mendeteksi 4 Anomali Penugasan Pengampu Sesuai PRD F9 (106–111)
+  /// 1. Mapel di rombel aktif tanpa Guru Utama
+  /// 2. Siswa aktif belum terpetakan di mapel sebagian (fallback Guru Utama)
+  /// 3. Siswa terdaftar ganda di >1 guru pada mapel sebagian (tumpang tindih)
+  /// 4. Guru nonaktif yang masih ditugaskan di pengampu aktif
+  Future<List<AnomaliPengampu>> deteksiAnomaliPengampu({required String semesterId}) async {
+    final sem = await (db.select(db.semester)..where((t) => t.id.equals(semesterId))).getSingleOrNull();
+    if (sem == null) return [];
+
+    final rombels = await (db.select(db.rombel)
+          ..where((t) => t.tahunAjaranId.equals(sem.tahunAjaranId) & t.deleted.equals(0)))
+        .get();
+    final mapels = await (db.select(db.mapel)
+          ..where((t) => t.aktif.equals(1) & t.deleted.equals(0)))
+        .get();
+    final pengampus = await (db.select(db.pengampu)
+          ..where((t) =>
+              t.semesterId.equals(semesterId) &
+              t.tanggalSelesai.isNull() &
+              t.deleted.equals(0)))
+        .get();
+    final gurus = await (db.select(db.guru)..where((t) => t.deleted.equals(0))).get();
+
+    final guruMap = {for (final g in gurus) g.id: g};
+    final rombelMap = {for (final r in rombels) r.id: r};
+    final mapelMap = {for (final m in mapels) m.id: m};
+
+    final anomalies = <AnomaliPengampu>[];
+
+    // Anomali 1: Mapel di rombel aktif yang belum punya pengampu utama
+    for (final r in rombels) {
+      for (final m in mapels) {
+        final pUtama = pengampus.where(
+          (p) => p.rombelId == r.id && p.mapelId == m.id && p.peran == 'utama',
+        );
+        if (pUtama.isEmpty) {
+          anomalies.add(
+            AnomaliPengampu(
+              jenis: JenisAnomaliPengampu.mapelTanpaUtama,
+              judul: 'Mapel ${m.nama} di ${r.nama} Belum Memiliki Guru Utama',
+              deskripsi: 'Setiap mata pelajaran wajib memiliki tepat satu Guru Utama aktif untuk menjamin tanggung jawab penilaian.',
+              tingkatKeparahan: 'kritis',
+              rombelId: r.id,
+              rombelNama: r.nama,
+              mapelId: m.id,
+              mapelNama: m.nama,
+            ),
+          );
+        }
+      }
+    }
+
+    // Anomali 4: Guru nonaktif yang masih tercatat di pengampu aktif
+    for (final p in pengampus) {
+      final guru = guruMap[p.guruId];
+      if (guru != null && guru.aktif == 0) {
+        final rNama = rombelMap[p.rombelId]?.nama ?? p.rombelId;
+        final mNama = mapelMap[p.mapelId]?.nama ?? p.mapelId;
+        anomalies.add(
+          AnomaliPengampu(
+            jenis: JenisAnomaliPengampu.guruNonaktif,
+            judul: 'Guru Nonaktif Ditugaskan: ${guru.namaLengkap}',
+            deskripsi: 'Guru berstatus nonaktif masih tercatat mengajar mapel $mNama di rombel $rNama.',
+            tingkatKeparahan: 'kritis',
+            rombelId: p.rombelId,
+            rombelNama: rNama,
+            mapelId: p.mapelId,
+            mapelNama: mNama,
+            guruId: guru.id,
+            guruNama: guru.namaLengkap,
+            pengampuIds: [p.id],
+          ),
+        );
+      }
+    }
+
+    // Anomali 2 & 3: Kelompok Siswa (Fallback & Tumpang Tindih)
+    // Kelompokkan pengampu berdasarkan (rombelId, mapelId)
+    final groupedPengampu = <String, List<PengampuData>>{};
+    for (final p in pengampus) {
+      final key = '${p.rombelId}_${p.mapelId}';
+      groupedPengampu.putIfAbsent(key, () => []).add(p);
+    }
+
+    for (final entry in groupedPengampu.entries) {
+      final group = entry.value;
+      final hasSebagian = group.any((p) => p.cakupan == 'sebagian');
+      if (!hasSebagian) continue;
+
+      final rombelId = group.first.rombelId;
+      final mapelId = group.first.mapelId;
+      final rNama = rombelMap[rombelId]?.nama ?? rombelId;
+      final mNama = mapelMap[mapelId]?.nama ?? mapelId;
+      final groupPengampuIds = group.map((p) => p.id).toList();
+
+      final keanggotaanAktif = await (db.select(db.keanggotaanRombel)
+            ..where((t) =>
+                t.rombelId.equals(rombelId) &
+                t.tanggalKeluar.isNull() &
+                t.deleted.equals(0)))
+          .get();
+
+      final psRows = await (db.select(db.pengampuSiswa)
+            ..where((t) => t.pengampuId.isIn(groupPengampuIds) & t.deleted.equals(0)))
+          .get();
+
+      final keanggotaanToTeachers = <String, List<String>>{};
+      for (final ps in psRows) {
+        keanggotaanToTeachers.putIfAbsent(ps.keanggotaanId, () => []).add(ps.pengampuId);
+      }
+
+      // Anomali 2: Siswa Fallback (belum masuk pengampu_siswa)
+      final unassigned = keanggotaanAktif.where((k) => !keanggotaanToTeachers.containsKey(k.id)).toList();
+      if (unassigned.isNotEmpty) {
+        anomalies.add(
+          AnomaliPengampu(
+            jenis: JenisAnomaliPengampu.siswaFallback,
+            judul: '${unassigned.length} Siswa di $rNama ($mNama) Belum Memiliki Kelompok',
+            deskripsi: 'Siswa belum terdaftar pada kelompok guru mana pun dan sementara dialihkan ke Guru Utama.',
+            tingkatKeparahan: 'peringatan',
+            rombelId: rombelId,
+            rombelNama: rNama,
+            mapelId: mapelId,
+            mapelNama: mNama,
+            jumlahSiswa: unassigned.length,
+            pengampuIds: groupPengampuIds,
+          ),
+        );
+      }
+
+      // Anomali 3: Siswa Tumpang Tindih (terdaftar di >1 guru untuk mapel yang sama)
+      final overlapping = keanggotaanToTeachers.entries.where((e) => e.value.length > 1).toList();
+      if (overlapping.isNotEmpty) {
+        anomalies.add(
+          AnomaliPengampu(
+            jenis: JenisAnomaliPengampu.siswaTumpangTindih,
+            judul: 'Tumpang Tindih: ${overlapping.length} Siswa Terdaftar di >1 Guru',
+            deskripsi: 'Terdapat siswa yang didaftarkan ke lebih dari satu kelompok guru untuk mapel $mNama di rombel $rNama.',
+            tingkatKeparahan: 'peringatan',
+            rombelId: rombelId,
+            rombelNama: rNama,
+            mapelId: mapelId,
+            mapelNama: mNama,
+            jumlahSiswa: overlapping.length,
+            pengampuIds: groupPengampuIds,
+          ),
+        );
+      }
+    }
+
+    return anomalies;
   }
 
   /// Mengambil daftar pengampu aktif untuk seorang guru pada semester aktif beserta ringkasan progres

@@ -13,7 +13,7 @@
 | **CP-1** | Penegakan Hak Push Server (PRD 9.6) & Data Master Seeder | **SELESAI (100%)** | 2026-10-26 |
 | **CP-2** | Integrasi Penuh Layar UI Flutter ke Database Drift SQLite | **SELESAI (100%)** | 2026-10-26 |
 | **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **SELESAI (100%)** | 2026-10-26 |
-| **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **BELUM (0%)** | - |
+| **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **SELESAI (100%)** | 2026-10-26 |
 | **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **BELUM (0%)** | - |
 | **CP-6** | Sandboxed File Viewer (F5), Offline EMIS, & Backup Terenkripsi | **BELUM (0%)** | - |
 
@@ -107,24 +107,28 @@ Target: Guru dapat login offline dengan PIN 6-digit dan menghubungkan aplikasi k
 
 ---
 
-## Checkpoint 4: Operasi Akademik Admin (PRD F7, F8, F9)
+## Checkpoint 4: Operasi Akademik Admin (PRD F7, F8, F9) (SUDAH SELESAI)
 Target: Admin madrasah dapat menjalankan mutasi massal, naik kelas, pergantian semester, dan memantau penugasan guru.
 
-- [ ] **4.1 Endpoint Transaksional Server:**
-  - [ ] `POST /api/v1/akademik/naik-kelas-massal`: Menerima daftar siswa, menutup keanggotaan lama, membuka keanggotaan baru, mencatat riwayat status.
-  - [ ] `POST /api/v1/akademik/pergantian-tahun`: Membuat tahun/semester baru, menyalin rombel, menyalin pengampu semester lalu, mengunci semester lama.
-- [ ] **4.2 Layar Naik Kelas Massal di App (Admin):**
-  - [ ] Pratinjau daftar siswa per rombel dengan opsi naik / tinggal kelas.
-  - [ ] Pemilihan rombel tujuan dan eksekusi transaksi tunggal.
-- [ ] **4.3 Layar & Deteksi "Cek Pengampu" (PRD F9 106–111):**
-  - [ ] Deteksi anomali 1: Mapel aktif tanpa Guru Utama.
-  - [ ] Deteksi anomali 2: Siswa aktif belum terpetakan pada mapel kelompok (sedang di-fallback ke Guru Utama).
-  - [ ] Deteksi anomali 3: Siswa terdaftar ganda di lebih dari satu kelompok guru.
-  - [ ] Deteksi anomali 4: Guru nonaktif yang masih ditugaskan.
-- [ ] **4.4 Dialog Pembagian Kelompok Siswa:**
-  - [ ] Tombol "Bagi Otomatis Ganjil/Genap".
-  - [ ] Tombol "Bagi Rata Sesuai Urutan Absen".
-  - [ ] Simpan pemetaan ke tabel `pengampu_siswa`.
+- [x] **4.1 Endpoint Transaksional Server (`server/app/api/akademik.py`):**
+  - [x] `POST /api/v1/akademik/naik-kelas-massal`: Menerima daftar siswa, menutup keanggotaan lama, membuka keanggotaan baru, mencatat riwayat status & audit log dalam satu transaksi WAL.
+  - [x] `POST /api/v1/akademik/pergantian-tahun`: Membuat tahun/semester baru, menyalin rombel, menyalin pengampu semester lalu, mengunci semester lama & memperbarui semester aktif.
+  - [x] 4 unit & integration test suite di `server/tests/test_akademik.py` lolos 100% (18/18 pytest passing).
+- [x] **4.2 Layar Naik Kelas Massal di App (Admin) (`naik_kelas_screen.dart`):**
+  - [x] Pratinjau daftar siswa per rombel dengan opsi naik / tinggal kelas / kelulusan.
+  - [x] Pemilihan rombel tujuan default & per-siswa, tombol cepat "Semua Naik" / "Semua Tinggal" / "Semua Lulus".
+  - [x] Eksekusi transaksi tunggal di Drift SQLite + pendaftaran perubahan ke outbox.
+- [x] **4.3 Layar & Deteksi "Cek Pengampu" (PRD F9 106–111) (`cek_pengampu_screen.dart`):**
+  - [x] Deteksi anomali 1: Mapel aktif tanpa Guru Utama (status Kritis).
+  - [x] Deteksi anomali 2: Siswa aktif belum terpetakan pada mapel kelompok (sedang di-fallback ke Guru Utama, status Peringatan).
+  - [x] Deteksi anomali 3: Siswa terdaftar ganda di lebih dari satu kelompok guru (tumpang tindih, status Peringatan).
+  - [x] Deteksi anomali 4: Guru nonaktif yang masih ditugaskan di pengampu aktif (status Kritis).
+  - [x] Filter kategori anomali (Semua, Kritis, Peringatan) & pintasan ke dialog alokasi kelompok.
+- [x] **4.4 Dialog Pembagian Kelompok Siswa & Pergantian Tahun:**
+  - [x] `PembagianKelompokDialog`: Tombol "Bagi Otomatis Ganjil/Genap", "Bagi Rata Urutan Absen", dan pill selector manual per siswa ke tabel `pengampu_siswa`.
+  - [x] `PergantianTahunDialog`: Wizard pergantian tahun ajaran baru & salin semester/rombel/pengampu otomatis.
+  - [x] Integrasi kartu "Operasi Akademik (Admin)" di Tab Pengaturan `main.dart`.
+  - [x] 6 unit & widget test suite di `app/test/akademik_test.dart` lolos 100% (31/31 flutter test passing, 0 issues pada `dart analyze`).
 
 ---
 

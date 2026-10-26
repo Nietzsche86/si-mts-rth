@@ -13,6 +13,9 @@ import 'presentation/screens/siswa/siswa_form_screen.dart';
 import 'presentation/screens/rombel/pindah_rombel_dialog.dart';
 import 'presentation/screens/sync/sync_pairing_screen.dart';
 import 'presentation/screens/auth/login_screen.dart';
+import 'presentation/screens/akademik/naik_kelas_screen.dart';
+import 'presentation/screens/akademik/cek_pengampu_screen.dart';
+import 'presentation/screens/akademik/pergantian_tahun_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1031,6 +1034,73 @@ class PengaturanTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Menu Operasi Akademik Admin
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.admin_panel_settings_rounded, color: AppColors.primary, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Operasi Akademik (Admin)',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Kelola kenaikan kelas massal, pergantian semester/tahun ajaran, dan monitoring penugasan guru.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const NaikKelasScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.drive_file_move_rounded, size: 18),
+                      label: const Text('Naik Kelas Massal'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const CekPengampuScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.rule_folder_rounded, size: 18, color: AppColors.primary),
+                      label: const Text('Cek Pengampu'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        showDialog(
+                          context: context,
+                          builder: (_) => const PergantianTahunDialog(),
+                        );
+                      },
+                      icon: const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.secondary),
+                      label: const Text('Pergantian Tahun'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),

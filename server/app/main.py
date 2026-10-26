@@ -8,6 +8,7 @@ from app.db.seeder import seed_initial_data
 from app.api.auth import router as auth_router
 from app.api.sync import router as sync_router
 from app.api.import_export import router as emis_router
+from app.api.akademik import router as akademik_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +37,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(sync_router, prefix=settings.API_V1_STR)
 app.include_router(emis_router, prefix=settings.API_V1_STR)
+app.include_router(akademik_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def healthcheck():
