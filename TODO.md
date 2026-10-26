@@ -12,7 +12,7 @@
 | **CP-0** | Fondasi Monorepo, Golden Schema, Engine Sync, CI/CD Android | **SELESAI (100%)** | 2026-10-26 |
 | **CP-1** | Penegakan Hak Push Server (PRD 9.6) & Data Master Seeder | **SELESAI (100%)** | 2026-10-26 |
 | **CP-2** | Integrasi Penuh Layar UI Flutter ke Database Drift SQLite | **SELESAI (100%)** | 2026-10-26 |
-| **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **BELUM (0%)** | - |
+| **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **SELESAI (100%)** | 2026-10-26 |
 | **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **BELUM (0%)** | - |
 | **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **BELUM (0%)** | - |
 | **CP-6** | Sandboxed File Viewer (F5), Offline EMIS, & Backup Terenkripsi | **BELUM (0%)** | - |
@@ -85,18 +85,25 @@ Target: Seluruh antarmuka Flutter tidak lagi memakai data tiruan (*mock*), melai
 
 ---
 
-## Checkpoint 3: Offline Authentication & QR Server Pairing
+## Checkpoint 3: Offline Authentication & QR Server Pairing (SUDAH SELESAI)
 Target: Guru dapat login offline dengan PIN 6-digit dan menghubungkan aplikasi ke laptop operator via QR.
 
-- [ ] **3.1 Kredensial Lokal Terenkripsi (Offline Login):**
-  - [ ] Saat login online pertama kali ke `/api/v1/auth/login`: simpan PIN hash, token JWT, data user, dan role di penyimpanan lokal aman.
-  - [ ] Saat offline: verifikasi input PIN terhadap PIN hash lokal.
-  - [ ] Batasi percobaan login gagal (kunci setelah 5x salah).
-- [ ] **3.2 QR Scanner & Server Pairing (`sync_pairing_screen.dart`):**
-  - [ ] Terapkan scanner QR untuk membaca payload pairing server: `{"url": "...", "fingerprint": "..."}`.
-  - [ ] Simpan konfigurasi server ke tabel `sync_state`.
-  - [ ] Tombol "Sinkron Sekarang": panggil `DioSyncClient.sync()` lengkap dengan push outbox, pull delta, dan `LocalGarbageCollector`.
-  - [ ] Banner status sinkronisasi di beranda bereaksi dinamis terhadap jumlah outbox dan selisih waktu sinkron terakhir.
+- [x] **3.1 Kredensial Lokal Terenkripsi (Offline Login):**
+  - [x] Saat login online pertama kali ke `/api/v1/auth/login`: simpan PIN hash (salted SHA-256), token JWT, data user, dan role di penyimpanan lokal aman (`flutter_secure_storage`).
+  - [x] Saat offline: verifikasi input PIN terhadap PIN hash lokal di Android Keystore atau akun seeder SQLite.
+  - [x] Batasi percobaan login gagal (kunci selama 15 menit setelah 5x salah).
+  - [x] Bangun model sesi `CurrentUserSession` secara kontekstual lengkap dengan status `isWaliKelas` dan nama rombel perwalian.
+- [x] **3.2 QR Scanner & Server Pairing (`sync_pairing_screen.dart`):**
+  - [x] Terapkan parser/scanner QR untuk membaca payload pairing server: `{"url": "...", "fingerprint": "..."}`.
+  - [x] Simpan konfigurasi server (`server_url`, `server_fingerprint`) ke tabel `sync_state`.
+  - [x] Tombol "Sinkron Sekarang": panggil `DioSyncClient.sync()` lengkap dengan push outbox, pull delta, dan `LocalGarbageCollector`.
+  - [x] Banner status sinkronisasi di beranda bereaksi dinamis terhadap jumlah outbox dan selisih waktu sinkron terakhir (`lastSyncTimestampProvider`).
+  - [x] Sediakan opsi "Keluar Akun (Logout)" di Tab Pengaturan untuk beralih kembali ke layar login.
+- [x] **3.3 Verifikasi Otomatis:**
+  - [x] Seluruh 8 test suite di `auth_sync_test.dart` lolos 100%.
+  - [x] Seluruh 25 flutter test di proyek lolos 100%.
+  - [x] `dart analyze lib test` melaporkan 0 issues.
+  - [x] Seluruh 14 pytest server tetap lulus 100%.
 
 ---
 

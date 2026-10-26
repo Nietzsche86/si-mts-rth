@@ -12,6 +12,7 @@ import 'presentation/screens/absensi/input_absensi_screen.dart';
 import 'presentation/screens/siswa/siswa_form_screen.dart';
 import 'presentation/screens/rombel/pindah_rombel_dialog.dart';
 import 'presentation/screens/sync/sync_pairing_screen.dart';
+import 'presentation/screens/auth/login_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +28,35 @@ class MTsApp extends StatelessWidget {
       title: 'MTs Roudhotut Thowalib',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const MainHomeScreen(),
+      home: const AppRootWrapper(),
     );
+  }
+}
+
+class AppRootWrapper extends ConsumerWidget {
+  const AppRootWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAuthenticated = ref.watch(isAuthenticatedProvider);
+    if (!isAuthenticated) {
+      return LoginScreen(
+        onLoginSuccess: () {
+          ref.read(isAuthenticatedProvider.notifier).state = true;
+        },
+        onOpenPairing: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SyncPairingScreen(
+                onTriggerSync: () {},
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return const MainHomeScreen();
   }
 }
 
@@ -47,6 +75,10 @@ class _MainHomeScreenState extends ConsumerState<MainHomeScreen> {
     final user = ref.watch(currentUserProvider);
     final semester = ref.watch(activeSemesterProvider);
     final pendingOutbox = ref.watch(pendingOutboxCountProvider).asData?.value ?? 0;
+    final lastSyncTime = ref.watch(lastSyncTimestampProvider).asData?.value;
+    final int lastSyncHours = lastSyncTime != null
+        ? DateTime.now().difference(lastSyncTime).inHours
+        : 72; // default 72 jam jika belum ada riwayat sinkronisasi
 
     return Scaffold(
       appBar: AppBar(
@@ -107,7 +139,7 @@ class _MainHomeScreenState extends ConsumerState<MainHomeScreen> {
           // Banner Status Sinkronisasi Sticky Reaktif
           SyncStatusBar(
             pendingCount: pendingOutbox,
-            lastSyncHours: 2,
+            lastSyncHours: lastSyncHours,
           ),
           Expanded(
             child: IndexedStack(
@@ -987,11 +1019,15 @@ class _AbsensiCepatTabState extends ConsumerState<AbsensiCepatTab> {
 }
 
 /// Tab 4: Pengaturan & Status Perangkat
-class PengaturanTab extends StatelessWidget {
+class PengaturanTab extends ConsumerWidget {
   const PengaturanTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final serverUrl = ref.watch(serverUrlProvider).asData?.value ?? 'http://192.168.1.100:8000';
+    final user = ref.watch(currentUserProvider);
+    final pendingOutbox = ref.watch(pendingOutboxCountProvider).asData?.value ?? 0;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1001,50 +1037,84 @@ class PengaturanTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Koneksi Server Operator WiFi',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                const Row(
+                  children: [
+                    Icon(Icons.wifi_tethering_rounded, color: AppColors.primary, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Koneksi Server Operator WiFi',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: 'http://192.168.1.100:8000',
-                  decoration: const InputDecoration(
-                    labelText: 'Alamat Server Operator',
-                    prefixIcon: Icon(Icons.wifi),
-                  ),
+                Text(
+                  'Alamat Server: $serverUrl',
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 ElevatedButton.icon(
                   onPressed: () {
                     HapticFeedback.lightImpact();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Membuka kamera scan QR Server...')),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SyncPairingScreen(
+                          pendingOutboxCount: pendingOutbox,
+                          onTriggerSync: () {},
+                        ),
+                      ),
                     );
                   },
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('Scan QR Pairing Server'),
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  label: const Text('Buka Layar Sinkron & QR Pairing'),
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 12),
-        const Card(
+        Card(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Informasi Perangkat',
+                const Text(
+                  'Informasi Akun & Perangkat',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
-                SizedBox(height: 8),
-                Text('Device ID: mobile-dev-001', style: TextStyle(fontSize: 13)),
-                SizedBox(height: 4),
-                Text('Versi Aplikasi: v1.5.0-offline', style: TextStyle(fontSize: 13)),
-                SizedBox(height: 4),
-                Text('Database: Drift SQLite + SQLCipher AES-256', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 10),
+                Text('Nama Pengguna: ${user.username}', style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                Text('Nama Lengkap: ${user.namaGuru}', style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                Text('Peran Aktif: ${user.role.toUpperCase()}', style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                const Text('Device ID: mobile-dev-001', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                const Text('Versi Aplikasi: v1.5.0-offline', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                const Text('Database: Drift SQLite + SQLCipher AES-256', style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    HapticFeedback.mediumImpact();
+                    final authRepo = ref.read(authRepoProvider);
+                    await authRepo.logout();
+                    ref.read(isAuthenticatedProvider.notifier).state = false;
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Berhasil keluar dari akun')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.logout_rounded, color: AppColors.danger, size: 18),
+                  label: const Text('Keluar Akun (Logout)', style: TextStyle(color: AppColors.danger)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.danger),
+                  ),
+                ),
               ],
             ),
           ),

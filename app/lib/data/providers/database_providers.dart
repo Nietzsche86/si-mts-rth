@@ -9,11 +9,15 @@ import 'package:path_provider/path_provider.dart';
 import '../db/app_database.dart';
 import '../db/database_seeder.dart';
 import '../sync/outbox_manager.dart';
+import '../sync/dio_sync_client.dart';
+import '../../core/security/secure_storage_service.dart';
 import '../repositories/siswa_repository.dart';
 import '../repositories/penilaian_repository.dart';
 import '../repositories/absensi_repository.dart';
 import '../repositories/rombel_repository.dart';
 import '../repositories/pengampu_repository.dart';
+import '../repositories/auth_repository.dart';
+import 'package:dio/dio.dart';
 
 /// Membuka koneksi database SQLite fisik atau in-memory fallback
 LazyDatabase openDatabaseConnection() {
@@ -79,6 +83,50 @@ final pengampuRepoProvider = Provider<PengampuRepository>((ref) {
   final outbox = ref.watch(outboxManagerProvider);
   return PengampuRepository(db, outbox);
 });
+
+/// Provider Secure Storage (Keystore)
+final secureStorageProvider = Provider<SecureStorageInterface>((ref) {
+  return SecureStorageService();
+});
+
+/// Provider HTTP Client Dio
+final dioClientProvider = Provider<Dio>((ref) {
+  return Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
+    ),
+  );
+});
+
+/// Provider Repositori Autentikasi
+final authRepoProvider = Provider<AuthRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final storage = ref.watch(secureStorageProvider);
+  final dio = ref.watch(dioClientProvider);
+  final deviceId = ref.watch(activeDeviceIdProvider);
+  return AuthRepository(
+    db: db,
+    storage: storage,
+    dio: dio,
+    deviceId: deviceId,
+  );
+});
+
+/// Provider Klien Sinkronisasi Dio
+final syncClientProvider = Provider<DioSyncClient>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final dio = ref.watch(dioClientProvider);
+  final outbox = ref.watch(outboxManagerProvider);
+  return DioSyncClient(
+    dio: dio,
+    db: db,
+    outbox: outbox,
+  );
+});
+
+/// Provider Status Autentikasi Pengguna (Default: true untuk sesi aktif lokal)
+final isAuthenticatedProvider = StateProvider<bool>((ref) => true);
 
 /// Device ID perangkat
 final activeDeviceIdProvider = Provider<String>((ref) => 'mobile-dev-001');
@@ -167,4 +215,25 @@ final kelasSayaSummaryProvider = FutureProvider.autoDispose<List<PengampuSummary
     guruId: user.guruId!,
     semesterId: semester.semesterId,
   );
+});
+
+/// Stream waktu sinkronisasi terakhir dari tabel sync_state
+final lastSyncTimestampProvider = StreamProvider<DateTime?>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final query = db.select(db.syncState)
+    ..where((t) => t.kunci.equals('last_sync_timestamp'));
+  return query.watchSingleOrNull().map((row) {
+    if (row == null || row.nilai.isEmpty) return null;
+    return DateTime.tryParse(row.nilai);
+  });
+});
+
+/// Stream alamat URL server dari tabel sync_state
+final serverUrlProvider = StreamProvider<String>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final query = db.select(db.syncState)
+    ..where((t) => t.kunci.equals('server_url'));
+  return query
+      .watchSingleOrNull()
+      .map((row) => row?.nilai ?? 'http://192.168.1.100:8000');
 });

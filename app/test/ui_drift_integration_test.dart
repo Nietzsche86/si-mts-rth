@@ -33,6 +33,8 @@ void main() {
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
             pendingOutboxCountProvider.overrideWith((ref) => Stream.value(0)),
+            lastSyncTimestampProvider.overrideWith((ref) => Stream.value(null)),
+            serverUrlProvider.overrideWith((ref) => Stream.value('http://192.168.1.100:8000')),
           ],
           child: const MTsApp(),
         ),

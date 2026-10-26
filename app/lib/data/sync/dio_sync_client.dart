@@ -35,6 +35,22 @@ class SyncPushSummary {
   });
 }
 
+class SyncProcessResult {
+  final bool isSuccess;
+  final SyncPushSummary pushSummary;
+  final int pulledCount;
+  final String? errorMessage;
+  final DateTime timestamp;
+
+  const SyncProcessResult({
+    required this.isSuccess,
+    required this.pushSummary,
+    required this.pulledCount,
+    this.errorMessage,
+    required this.timestamp,
+  });
+}
+
 class DioSyncClient {
   final Dio dio;
   final AppDatabase db;
@@ -209,5 +225,59 @@ class DioSyncClient {
     }
 
     return items.length;
+  }
+
+  /// Siklus lengkap sinkronisasi: Push outbox -> Pull delta -> Local GC -> Update sync_state
+  Future<SyncProcessResult> sync({
+    required String baseUrl,
+    required String token,
+    required String deviceId,
+  }) async {
+    try {
+      // 1. Kirim antrean perubahan outbox ke server
+      final pushSummary = await pushChanges(
+        baseUrl: baseUrl,
+        token: token,
+        deviceId: deviceId,
+      );
+
+      // 2. Tarik pembaruan delta dari server dan jalankan Local GC
+      final pulledCount = await pullChanges(
+        baseUrl: baseUrl,
+        token: token,
+        deviceId: deviceId,
+      );
+
+      final now = DateTime.now().toUtc();
+
+      // 3. Simpan timestamp sinkronisasi sukses
+      await db.into(db.syncState).insertOnConflictUpdate(
+            SyncStateCompanion(
+              kunci: const Value('last_sync_timestamp'),
+              nilai: Value(now.toIso8601String()),
+            ),
+          );
+
+      return SyncProcessResult(
+        isSuccess: true,
+        pushSummary: pushSummary,
+        pulledCount: pulledCount,
+        timestamp: now,
+      );
+    } catch (e) {
+      return SyncProcessResult(
+        isSuccess: false,
+        pushSummary: const SyncPushSummary(
+          totalSent: 0,
+          applied: 0,
+          merged: 0,
+          failed: 0,
+          details: [],
+        ),
+        pulledCount: 0,
+        errorMessage: e.toString(),
+        timestamp: DateTime.now().toUtc(),
+      );
+    }
   }
 }

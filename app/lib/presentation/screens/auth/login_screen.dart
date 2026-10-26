@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class LoginScreen extends StatefulWidget {
+import '../../../core/theme/app_theme.dart';
+import '../../../data/providers/database_providers.dart';
+
+class LoginScreen extends ConsumerStatefulWidget {
   final VoidCallback onLoginSuccess;
   final VoidCallback onOpenPairing;
 
@@ -13,17 +17,70 @@ class LoginScreen extends StatefulWidget {
   });
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _pinController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+  int _lockoutSeconds = 0;
+  Timer? _lockoutTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkInitialLockoutAndCachedUser();
+  }
+
+  Future<void> _checkInitialLockoutAndCachedUser() async {
+    final authRepo = ref.read(authRepoProvider);
+    final remainingSec = await authRepo.getRemainingLockoutSeconds();
+    if (remainingSec > 0 && mounted) {
+      _startLockoutCountdown(remainingSec);
+    }
+
+    final cachedUsername = await authRepo.storage.read(key: 'auth_username');
+    if (cachedUsername != null && cachedUsername.isNotEmpty && mounted) {
+      setState(() {
+        _usernameController.text = cachedUsername;
+      });
+    }
+  }
+
+  void _startLockoutCountdown(int seconds) {
+    setState(() {
+      _lockoutSeconds = seconds;
+      final minutes = (seconds / 60).ceil();
+      _errorMessage =
+          'Akun terkunci karena 5x percobaan gagal. Coba lagi dalam $minutes menit ($seconds detik).';
+    });
+
+    _lockoutTimer?.cancel();
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_lockoutSeconds > 1) {
+          _lockoutSeconds--;
+          final minutes = (_lockoutSeconds / 60).ceil();
+          _errorMessage =
+              'Akun terkunci karena 5x percobaan gagal. Coba lagi dalam $minutes menit ($_lockoutSeconds detik).';
+        } else {
+          _lockoutSeconds = 0;
+          _errorMessage = null;
+          timer.cancel();
+        }
+      });
+    });
+  }
 
   @override
   void dispose() {
+    _lockoutTimer?.cancel();
     _usernameController.dispose();
     _pinController.dispose();
     super.dispose();
@@ -40,24 +97,44 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    if (_lockoutSeconds > 0) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    // Simulasi verifikasi lokal cepat
-    await Future.delayed(const Duration(milliseconds: 300));
+    final authRepo = ref.read(authRepoProvider);
+    final result = await authRepo.login(username: username, pin: pin);
+
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
     });
 
-    HapticFeedback.lightImpact();
-    widget.onLoginSuccess();
+    if (result.isSuccess && result.session != null) {
+      HapticFeedback.lightImpact();
+      ref.read(currentUserProvider.notifier).state = result.session!;
+      ref.read(isAuthenticatedProvider.notifier).state = true;
+      widget.onLoginSuccess();
+    } else if (result.isLockedOut) {
+      HapticFeedback.heavyImpact();
+      _startLockoutCountdown(result.lockoutRemainingSeconds);
+    } else {
+      HapticFeedback.vibrate();
+      setState(() {
+        _errorMessage = result.errorMessage ?? 'Gagal masuk aplikasi';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLocked = _lockoutSeconds > 0;
+
     return Scaffold(
       backgroundColor: AppTheme.sandGrey,
       body: SafeArea(
@@ -108,32 +185,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
 
                   // Offline-First Badge Pill
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.mintSurface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFA7F3D0)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.wifi_off_rounded, size: 14, color: AppTheme.emeraldPrimary),
-                            SizedBox(width: 6),
-                            Text(
-                              'Offline-Ready • SQLCipher Terenkripsi',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.emeraldPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.mintSurface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
                       ),
-                    ],
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.wifi_off_rounded, size: 13, color: AppTheme.emeraldPrimary),
+                          SizedBox(width: 5),
+                          Text(
+                            'Offline-Ready • Keystore',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.emeraldPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 28),
 
@@ -158,7 +234,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.error_outline, size: 18, color: Color(0xFFDC2626)),
+                                Icon(
+                                  isLocked ? Icons.lock_clock_rounded : Icons.error_outline,
+                                  size: 20,
+                                  color: const Color(0xFFDC2626),
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -184,8 +264,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _usernameController,
+                          enabled: !isLocked && !_isLoading,
                           decoration: const InputDecoration(
-                            hintText: 'Contoh: ahmad_faiz',
+                            hintText: 'Contoh: guru_dahlan',
                             prefixIcon: Icon(Icons.person_outline, size: 20),
                           ),
                         ),
@@ -199,6 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _pinController,
+                          enabled: !isLocked && !_isLoading,
                           obscureText: true,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
@@ -214,14 +296,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         // Tombol Masuk
                         ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
+                          onPressed: (_isLoading || isLocked) ? null : _handleLogin,
                           child: _isLoading
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
-                              : const Text('Masuk Aplikasi'),
+                              : Text(isLocked ? 'Terkunci ($_lockoutSeconds detik)' : 'Masuk Aplikasi'),
                         ),
                       ],
                     ),
