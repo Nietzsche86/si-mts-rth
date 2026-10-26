@@ -14,7 +14,7 @@
 | **CP-2** | Integrasi Penuh Layar UI Flutter ke Database Drift SQLite | **SELESAI (100%)** | 2026-10-26 |
 | **CP-3** | Offline Authentication, Keystore PIN Cache, & QR Pairing | **SELESAI (100%)** | 2026-10-26 |
 | **CP-4** | Operasi Akademik Admin: Naik Kelas, Salin Semester, Cek Pengampu | **SELESAI (100%)** | 2026-10-26 |
-| **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **BELUM (0%)** | - |
+| **CP-5** | Rekap Nilai K13 Lengkap, Ranking Rombel, & Rekap Absensi | **SELESAI (100%)** | 2026-10-26 |
 | **CP-6** | Sandboxed File Viewer (F5), Offline EMIS, & Backup Terenkripsi | **BELUM (0%)** | - |
 
 ---
@@ -132,18 +132,28 @@ Target: Admin madrasah dapat menjalankan mutasi massal, naik kelas, pergantian s
 
 ---
 
-## Checkpoint 5: Rekap Nilai K13 Lengkap & Laporan (PRD F11, F12, F13)
+## Checkpoint 5: Rekap Nilai K13 Lengkap & Laporan (PRD F11, F12, F13) (SUDAH SELESAI)
 Target: Rekapitulasi nilai otomatis sesuai kurikulum 2013 dan rekap kehadiran periodik.
 
-- [ ] **5.1 Layar Rekap Nilai Rombel & Siswa:**
-  - [ ] Matriks nilai siswa per mapel: rata-rata pengetahuan, rata-rata keterampilan, nilai akhir, predikat K13.
-  - [ ] Perhitungan ranking siswa dalam satu rombel berdasarkan nilai akhir gabungan.
-  - [ ] Tampilan progres kelengkapan nilai per pengampu (termasuk pengampu kelompok).
-- [ ] **5.2 Dashboard Kepala Madrasah:**
-  - [ ] Ringkasan statistik kehadiran siswa per rombel/tingkat.
-  - [ ] Ringkasan persentase ketuntasan belajar per mata pelajaran terhadap KKM.
-- [ ] **5.3 Rekap Absensi Bulanan & Semester:**
-  - [ ] Ringkasan total H, S, I, A per siswa dalam rentang tanggal tertentu.
+- [x] **5.1 Layar Rekap Nilai Rombel & Siswa (`rekap_nilai_screen.dart`):**
+  - [x] Matriks nilai siswa per mapel: rata-rata pengetahuan (KD3), rata-rata keterampilan (KD4), nilai akhir terbobot, predikat K13 ($A, B, C, D$).
+  - [x] Perhitungan ranking siswa dalam satu rombel otomatis berdasarkan rata-rata nilai akhir gabungan dengan tie-handling standar.
+  - [x] Kartu statistik rombel: rata-rata nilai rombel, nilai tertinggi, nilai terendah, dan persentase ketuntasan KKM.
+  - [x] Layar progres kelengkapan nilai per pengampu (`kelengkapan_pengampu_screen.dart`) memperhitungkan peran utama, pendamping, kelompok `pengampu_siswa`, dan fallback.
+- [x] **5.2 Dashboard Kepala Madrasah (`kepala_dashboard_screen.dart`):**
+  - [x] 4 Kartu KPI Eksekutif: Rata-rata kehadiran madrasah, persentase ketuntasan KKM, total siswa aktif, total rombel aktif.
+  - [x] Ringkasan statistik kehadiran siswa per rombel dan per tingkat (Kelas 7, 8, 9).
+  - [x] Ringkasan persentase ketuntasan belajar per mata pelajaran terhadap KKM dengan progress bar semantik (Hijau $\ge 85\%$, Amber $70-84\%$, Merah $< 70\%$).
+- [x] **5.3 Rekap Absensi Bulanan & Semester (`rekap_absensi_screen.dart`):**
+  - [x] Ringkasan total H, S, I, A per siswa dalam rentang periode (Bulan Ini, 1 Semester Penuh, atau Rentang Tanggal Kustom).
+  - [x] Kartu akumulasi kehadiran rombel dengan tingkat kehadiran persentase.
+  - [x] Indikator peringatan dini `Alpa Tinggi!` jika siswa memiliki alpa $\ge 3$ hari.
+  - [x] Integrasi menu "Laporan & Dashboard Eksekutif" di Tab Pengaturan dan pintasan "Rekap Nilai" di kartu rombel pengampu Beranda.
+- [x] **5.4 Verifikasi Otomatis:**
+  - [x] 11 unit & widget test suite baru di `app/test/rekap_laporan_test.dart` lolos 100%.
+  - [x] Seluruh 42 flutter test di monorepo lolos 100%.
+  - [x] `dart analyze lib test` melaporkan 0 error issues.
+  - [x] Seluruh 18 pytest server FastAPI tetap lulus 100%.
 
 ---
 

@@ -16,6 +16,10 @@ import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/akademik/naik_kelas_screen.dart';
 import 'presentation/screens/akademik/cek_pengampu_screen.dart';
 import 'presentation/screens/akademik/pergantian_tahun_dialog.dart';
+import 'presentation/screens/penilaian/rekap_nilai_screen.dart';
+import 'presentation/screens/penilaian/kelengkapan_pengampu_screen.dart';
+import 'presentation/screens/dashboard/kepala_dashboard_screen.dart';
+import 'presentation/screens/absensi/rekap_absensi_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -430,9 +434,46 @@ class KelasSayaTab extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                item.progressText,
-                style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    item.progressText,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                  ),
+                  InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RekapNilaiScreen(
+                            initialRombelId: item.rombelId,
+                            initialMapelId: item.mapelId,
+                          ),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.table_chart_outlined, size: 14, color: AppColors.primary),
+                          SizedBox(width: 4),
+                          Text(
+                            'Rekap Nilai',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1093,6 +1134,84 @@ class PengaturanTab extends ConsumerWidget {
                       },
                       icon: const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.secondary),
                       label: const Text('Pergantian Tahun'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Menu Laporan, Rekap K13, & Dashboard Eksekutif
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.dashboard_customize_rounded, color: AppColors.primary, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Laporan & Dashboard Eksekutif',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Akses rekap nilai K13, pemeringkatan siswa, laporan kehadiran periodik, dan monitoring eksekutif Kepala Madrasah.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const KepalaDashboardScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.analytics_rounded, size: 18),
+                      label: const Text('Dashboard Kepala'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RekapNilaiScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.table_chart_rounded, size: 18, color: AppColors.primary),
+                      label: const Text('Rekap Nilai & Ranking'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const KelengkapanPengampuScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.fact_check_rounded, size: 18, color: AppColors.secondary),
+                      label: const Text('Kelengkapan Pengampu'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RekapAbsensiScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primary),
+                      label: const Text('Rekap Absensi'),
                     ),
                   ],
                 ),
